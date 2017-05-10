@@ -119,7 +119,7 @@ class PVPanel(object):
                        + self.k_4 * np.log(G_)
                        + self.k_5 * (np.log(G_)) ** 2)
                + self.k_6 * (T_ ** 2))
-        eff.fillna(0)  # NaNs in case that G_ was <= 0
+        eff.fillna(0, inplace = True)  # NaNs in case that G_ was <= 0
         eff[eff < 0] = 0  # Also make sure efficiency can't be negative
         return eff
 
