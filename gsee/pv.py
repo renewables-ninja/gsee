@@ -113,13 +113,15 @@ class PVPanel(object):
         # T_: normalized module temperature
         T_ = (self.c_temp_tamb * tamb + self.c_temp_irrad * irradiance) - R_TMOD
         # NB: np.log without base implies base e or ln
+        np.seterr(divide='ignore')
         eff = (1 + self.k_1 * np.log(G_)
                + self.k_2 * (np.log(G_)) ** 2
                + T_ * (self.k_3
                        + self.k_4 * np.log(G_)
                        + self.k_5 * (np.log(G_)) ** 2)
                + self.k_6 * (T_ ** 2))
-        eff.fillna(0)  # NaNs in case that G_ was <= 0
+        np.seterr(divide='warn')
+        eff.fillna(0, inplace = True)  # NaNs in case that G_ was <= 0
         eff[eff < 0] = 0  # Also make sure efficiency can't be negative
         return eff
 
@@ -243,7 +245,26 @@ def run_plant_model(data, coords, tilt, azim, tracking, capacity,
         ]
         return pd.DataFrame.from_items(items)
     else:
-        return sim
+        return output
+
+def run_plant_model_location(mission, tilt, azim, tracking, capacity,
+                    technology='csi', system_loss=0.10, angles=None,
+                    include_raw_data=False, **kwargs):
+    data = mission
+    sim_result = []
+    lat = mission.lat
+    lon = mission.lon
+    for hour in range(0, len(data), 24):
+        coord = (lat[hour], lon[hour])
+        data_singleday = data.iloc[hour:hour + 24]
+        sim = run_plant_model(data_singleday, coord, tilt, azim, tracking, capacity,
+                    technology, system_loss, angles,
+                    include_raw_data, **kwargs)
+        sim_result.extend(sim)
+
+    return pd.Series(sim_result, index=data.index) * (1 - system_loss)
+
+
 
 
 def optimal_tilt(lat):
@@ -279,3 +300,4 @@ def optimal_tilt(lat):
     else:  # lat > 50
         # raise NotImplementedError('Not implemented for latitudes beyond 50.')
         return 40  # Simply use 40 degrees above lat 50
+
