@@ -126,6 +126,25 @@ def _daily_diffuse(obs, ks, sunrise, sunset, p=DEFAULT_PARAMS):
     return values
 
 
+def _daily_diffuse_multi(obs, ks, sunrise, sunset, p=DEFAULT_PARAMS):
+
+
+
+    for hour in range(24):
+        if np.isnan(ks[hour]):
+            d = np.nan
+        else:
+            ast = _solartime(obs[hour], sun)
+            pwr = (p['a0'] + p['a1'] * ks[hour]
+                   + p['b1'] * ast + p['b2'] * alpha
+                   + p['b3'] * k_day + p['b4'] * psi(hour, ks))
+            d = 1 / (1 + math.e ** pwr)
+        values.append(d)
+        # Increase obs.date by one hour for the next iteration
+        obs.date = obs.date.datetime() + datetime.timedelta(hours=1)
+        sun.compute(obs)
+
+
 def run(hourly_clearness, coords, rise_set_times=None):
     """Run the BRL model
 
@@ -159,4 +178,30 @@ def run(hourly_clearness, coords, rise_set_times=None):
         sunrise, sunset = rise_set_times[int(i / 24)]
         results = _daily_diffuse(obs, ks, sunrise, sunset)
         diffuse_fractions.extend(results)
+    return results
+
+
+
+
+def location_run(mission, rise_set_times=None):
+    """
+    
+    :param mission: pandas DataFrame
+    :param rise_set_times: optional sun rise time
+    :return: pandas DataFrame
+            contains the time series of diffuse fraction
+    """
+    # A basic assumption have been made here is solar geometry calculation is
+    # fixed at a location at a single day.
+    hourly_clearness = mission['kt']
+    lat = mission.lat
+    lon = mission.lon
+    diffuse_fractions = []
+    for hour in range(0, len(hourly_clearness), 24):
+        coord = (lat[hour], lon[hour])
+        hourly_clearness_singleday = hourly_clearness.iloc[hour:hour+24]
+        results = run(hourly_clearness_singleday, coord)
+        diffuse_fractions.extend(results)
+
     return pd.Series(diffuse_fractions, index=hourly_clearness.index)
+
