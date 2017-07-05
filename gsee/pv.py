@@ -167,7 +167,7 @@ def run_plant_model(data, coords, tilt, azim, tracking, capacity,
     Parameters
     ----------
     data : pandas DataFrame
-        Must contain columns 'global_horizontal' (in kW/m2)
+        Must contain columns 'global_horizontal' (in W/m2)
         and 'diffuse_fraction', and may contain a 'temperature' column
         for ambient air temperature (in deg C).
     coords : (float, float) tuple
@@ -201,8 +201,8 @@ def run_plant_model(data, coords, tilt, azim, tracking, capacity,
         raise ValueError('system_loss must be >=0 and <=1')
 
     # Process data
-    dir_horiz = data.global_horizontal * (1 - data.diffuse_fraction)
-    diff_horiz = data.global_horizontal * data.diffuse_fraction
+    dir_horiz = data.global_horizontal * (1 - data.diffuse_fraction)/1000
+    diff_horiz = data.global_horizontal * data.diffuse_fraction/1000
     # TODO more flexibilty when passing in data, e.g. allow passing in
     # other combinations of data like DNI + global horizontal
     # NB: aperture_irradiance expects azim/tilt in radians!
