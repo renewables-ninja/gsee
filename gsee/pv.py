@@ -91,7 +91,7 @@ class PVPanel(object):
             irradiance = direct
         return (irradiance * self.panel_aperture
                 * self.panel_relative_efficiency(irradiance, tamb)
-                * self.panel_ref_efficiency)
+                * self.panel_ref_efficiency).fillna(0)
 
     def panel_relative_efficiency(self, irradiance, tamb):
         """
