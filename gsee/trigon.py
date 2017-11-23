@@ -207,7 +207,9 @@ def aperture_irradiance(direct, diffuse, coords,
     else:
         raise ValueError('Invalid setting for tracking: {}'.format(tracking))
     # 4. Compute direct and diffuse irradiance on plane
-    plane_direct = (dni * np.cos(incidence)).fillna(0)
+    # clip_lower(0) ensures that very low panel to sun altitude angles do not
+    # result in negative direct irradiance (reflection)
+    plane_direct = (dni * np.cos(incidence)).fillna(0).clip_lower(0)
     plane_diffuse = (diffuse * ((1 + np.cos(panel_tilt)) / 2)
                      + albedo * (direct + diffuse)
                      * ((1 - np.cos(panel_tilt)) / 2)).fillna(0)
