@@ -154,9 +154,10 @@ _PANEL_TYPES = {
 }
 
 
-def run_plant_model(data, coords, tilt, azim, tracking, capacity,
-                    technology='csi', system_loss=0.10, angles=None,
-                    include_raw_data=False, **kwargs):
+def run_model(
+        data, coords, tilt, azim, tracking, capacity,
+        technology='csi', system_loss=0.10, angles=None,
+        include_raw_data=False, **kwargs):
     """
     Run PV plant model.
 
