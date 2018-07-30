@@ -10,7 +10,7 @@ setup(
     version=__version__,
     author='Stefan Pfenninger',
     author_email='stefan@pfenninger.org',
-    description='gsee -- global solar energy estimator',
+    description='GSEE: Global Solar Energy Estimator',
     packages=find_packages(),
     install_requires=[
         "pyephem >= 3.7.6.0",

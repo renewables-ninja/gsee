@@ -17,11 +17,12 @@ Maximum power point tracking is assumed.
 """
 
 import math
+import warnings
 
 import numpy as np
 import pandas as pd
 
-from . import trigon
+from gsee import trigon
 
 # Constants
 R_TAMB = 20  # Reference ambient temperature (degC)
@@ -56,7 +57,7 @@ class PVPanel(object):
     """
     def __init__(self, panel_aperture=1.0, panel_ref_efficiency=1.0,
                  c_temp_amb=1, c_temp_irrad=35):
-        super(PVPanel, self).__init__()
+        super().__init__()
         # Panel characteristics
         self.panel_aperture = panel_aperture
         self.panel_ref_efficiency = panel_ref_efficiency
@@ -113,13 +114,18 @@ class PVPanel(object):
         # T_: normalized module temperature
         T_ = (self.c_temp_tamb * tamb + self.c_temp_irrad * irradiance) - R_TMOD
         # NB: np.log without base implies base e or ln
-        eff = (1 + self.k_1 * np.log(G_)
-               + self.k_2 * (np.log(G_)) ** 2
-               + T_ * (self.k_3
-                       + self.k_4 * np.log(G_)
-                       + self.k_5 * (np.log(G_)) ** 2)
-               + self.k_6 * (T_ ** 2))
-        eff.fillna(0, inplace = True)  # NaNs in case that G_ was <= 0
+        # Catching warnings to suppress "RuntimeWarning: invalid value encountered in log"
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            eff = (
+                1 + self.k_1 * np.log(G_)
+                + self.k_2 * (np.log(G_)) ** 2
+                + T_ * (self.k_3
+                        + self.k_4 * np.log(G_)
+                        + self.k_5 * (np.log(G_)) ** 2)
+                + self.k_6 * (T_ ** 2)
+            )
+        eff.fillna(0, inplace=True)  # NaNs in case that G_ was <= 0
         eff[eff < 0] = 0  # Also make sure efficiency can't be negative
         return eff
 

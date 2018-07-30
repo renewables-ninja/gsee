@@ -1,10 +1,10 @@
-# gsee -- global solar energy estimator
+# GSEE: global solar energy estimator
 
-`gsee` is a lightweight library designed for speed and ease of use. [Renewables.ninja](https://www.renewables.ninja/) PV data is generated with `gsee`.
+`GSEE` is a small solar energy simulation library designed for speed and ease of use. [Renewables.ninja](https://www.renewables.ninja/) PV data is generated with `GSEE`.
 
 ## Requirements
 
-Only tested on Python 3.
+Python 3.
 
 Required libraries:
 
@@ -14,40 +14,58 @@ Required libraries:
 
 ## Installation
 
-The recommended way to get numpy and pandas is to use the [Anaconda Python distribution](https://www.continuum.io/downloads), then install gsee:
+The recommended way to get numpy and pandas is to use the [Anaconda Python distribution](https://www.continuum.io/downloads), then install `GSEE`:
 
     pip install -e git+https://github.com/renewables-ninja/gsee.git#egg=gsee
 
-## Background
+## Functionality
 
-This is a collection of tools to estimate output from solar power plants.
+The following submodules are available:
 
-`trigon` contains functions to calculate irradiance on an inclined plane. `brl_model` is an implementation of a method to derive the diffuse fraction of irradiance, based on Ridley et al. (2010). `pv` is a model to derive power output from solar irradiance.
+* __``pv``__: electric output from PV a panel
+* __``trigon``__: functions to calculate irradiance on an inclined plane
+* __``brl_model``__: an implementation of the BRL model, a method to derive the diffuse fraction of irradiance, based on Ridley et al. (2010)
+
+A model can be imported like this: ``import gsee.pv``
+
+A plant simulation model implements a model class (e.g. ``PVPlant``) with the relevant settings, and a ``run_model()`` function that take time series data (a pandas Series) and runs a default instance of the model class, but can also take a ``model`` argument to specify a custom-configured model instance.
 
 ## Examples
+
+### Power output from a PV system with fixed panels
+
+In this example, ``data`` must be a pandas.DataFrame with columns ``global_horizontal`` (in kW/m2), ``diffuse_fraction``, and optionally a ``temperature`` column for ambient air temperature (in degrees Celsius).
+
+```python
+result = gsee.pv.run_model(
+    data,
+    coords=(22.78, 5.51),  # Latitude and longitude
+    tilt=30, # 30 degrees tilt angle
+    azim=180,  # facing towards equator,
+    tracking=0,  # fixed - no tracking
+    capacity=1,  # 1kW
+)
+```
 
 ### Aperture irradiance on a panel with 2-axis tracking
 
 ```python
-locations = (22.78, 5.51)
-plane_irradiance = gsee.trigon.aperture_irradiance(data['direct_horizontal'],
-                                                   data['diffuse_horizontal'],
-                                                   location, tracking=2)
+location = (22.78, 5.51)
+plane_irradiance = gsee.trigon.aperture_irradiance(
+    data['direct_horizontal'], data['diffuse_horizontal'],
+    location, tracking=2
+)
 ```
 
-## Plant models
+## Credits and contact
 
-Currently available: pv
-
-* __pv__: based on published PV module performance data, see `pv.py` for details
-
-A model can be imported like this: ``import gsee.pv``
-
-A model implements a model class (e.g. ``PVPlant``) with the relevant settings, and a ``run_model()`` function that take time series data (a pandas Series) and runs a default instance of the model class, but can also take a ``model`` argument to specify a custom-configured model instance.
+Contact [Stefan Pfenninger](mailto:stefan.pfenninger@usys.ethz.ch) for questions about `GSEE`. `GSEE` is also a component of the [Renewables.ninja](https://www.renewables.ninja) project, developed by Stefan Pfenninger and Iain Staffell. Use the [contact page](https://www.renewables.ninja/about) there if you want more information about Renewables.ninja.
 
 ## Citation
 
-Stefan Pfenninger and Iain Staffell (2016). Long-term patterns of European PV output using 30 years of validated hourly reanalysis and satellite data. *Energy* 114, pp. 1251-1265. [doi: 10.1016/j.energy.2016.08.060](https://dx.doi.org/10.1016/j.energy.2016.08.060)
+If you use `GSEE` or code derived from it in academic work, please cite:
+
+Stefan Pfenninger and Iain Staffell (2016). Long-term patterns of European PV output using 30 years of validated hourly reanalysis and satellite data. *Energy* 114, pp. 1251-1265. [doi: 10.1016/j.energy.2016.08.060](https://doi.org/10.1016/j.energy.2016.08.060)
 
 ## License
 

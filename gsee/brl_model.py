@@ -19,7 +19,7 @@ import ephem
 import pandas as pd
 import numpy as np
 
-from . import trigon
+from gsee import trigon
 
 
 def _solartime(observer, sun):
