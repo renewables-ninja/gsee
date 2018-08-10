@@ -1,0 +1,10 @@
+name: gsee
+
+channels:
+    - conda-forge
+    - anaconda
+
+dependencies:
+    - twine
+    - setuptools
+    - wheel

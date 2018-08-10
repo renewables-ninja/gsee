@@ -4,9 +4,7 @@
 
 ## Requirements
 
-Python 3.
-
-Required libraries:
+Works only with Python 3. Required libraries:
 
 * [pyephem](http://rhodesmill.org/pyephem/)
 * [numpy](http://www.numpy.org/)
@@ -14,9 +12,11 @@ Required libraries:
 
 ## Installation
 
-The recommended way to get numpy and pandas is to use the [Anaconda Python distribution](https://www.continuum.io/downloads), then install `GSEE`:
+Simply install with `pip`:
 
-    pip install -e git+https://github.com/renewables-ninja/gsee.git#egg=gsee
+    pip install gsee
+
+The recommended way to get the required numpy and pandas libraries is to use the [Anaconda Python distribution](https://www.continuum.io/downloads).
 
 ## Functionality
 
@@ -56,6 +56,12 @@ plane_irradiance = gsee.trigon.aperture_irradiance(
     location, tracking=2
 )
 ```
+
+## Development
+
+To install the latest development version directly from GitHub:
+
+    pip install -e git+https://github.com/renewables-ninja/gsee.git#egg=gsee
 
 ## Credits and contact
 
