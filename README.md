@@ -1,3 +1,5 @@
+# GSEE: Interface
+
 # GSEE: global solar energy estimator
 
 `GSEE` is a small solar energy simulation library designed for speed and ease of use. [Renewables.ninja](https://www.renewables.ninja/) PV data is generated with `GSEE`.
