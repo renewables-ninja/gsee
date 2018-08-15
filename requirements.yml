@@ -8,3 +8,8 @@ dependencies:
     - pyephem >= 3.7.6.0
     - numpy >= 1.10.1
     - pandas >= 0.18.0
+    - joblib >= 0.11
+    - scipy >= 0.19.1
+    - xarray >= 0.10.7
+    - gsee >= 0.1.0
+
