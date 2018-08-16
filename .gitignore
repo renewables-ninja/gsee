@@ -2,3 +2,5 @@
 *.egg-info
 build/
 dist/
+gsee/climdata_interface/cyth_func.c
+gsee/climdata_interface/cyth_func.html
