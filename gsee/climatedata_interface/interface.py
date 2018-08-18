@@ -1,18 +1,21 @@
 import xarray as xr
+import pandas as pd
+import numpy as np
 from joblib import Parallel, delayed
+from calendar import monthrange
 import multiprocessing
 import os
 import time
 from scipy import spatial
 from itertools import product
-from gsee.climdata_interface.interface_functions import *
-from typing import List
+from gsee.climatedata_interface.pre_gsee_processing import resample_for_gsee, resample_for_gsee_with_pdfs, PVstation
 
 
-def run_interface(th_tuple: tuple, outfile: str, params: List[str],  df_tuple=('', ''), at_tuple=('', ''),
+def run_interface(th_tuple: tuple, outfile: str, params, df_tuple=('', ''), at_tuple=('', ''),
                   in_freq='detect', timeformat='other', use_PDFs=True, th_factor=1/1000,
                   num_cores=multiprocessing.cpu_count(),
-                  pdfs_file_path='gsee/climdata_interface/PDFs/MERRA2_rad3x3_2011-2015-PDFs_land_prox.nc4'):
+                  pdfs_file_path='{}/PDFs/MERRA2_rad3x3_2011-2015-PDFs_land_prox.nc4'
+                  .format(os.path.dirname(os.path.abspath(__file__)))):
     """
     Important: GSEE uses kW, so th_factor is set to 1000 by default, as often data is in W.
     Input file must include 'time', 'lat' and 'lon' dimension.
@@ -130,7 +133,7 @@ def run_interface(th_tuple: tuple, outfile: str, params: List[str],  df_tuple=('
     # Produces list of coordinates of all grid-points, over which to iterate afterwards
     coord_list = list(product(tlat, tlon))
 
-    # Modify Time dimension so it fits the requirements of the "run_gsee" function
+    # Modify Time dimension so it fits the requirements of the "resample_for_gsee" function
     # -------------------------------------------------------------------------------------
 
     # Check whether the time dimension was recognised correctly and interpreted as time by dataset
@@ -167,9 +170,9 @@ def run_interface(th_tuple: tuple, outfile: str, params: List[str],  df_tuple=('
         # Store length of coordinate list in prog_mem to draw the progress bar dynamically:
         prog_mem.append(len(coord_list))
         if not use_PDFs:
-            Parallel(n_jobs=num_cores)(delayed(run_gsee)(ds_tot.sel(lat=coords[0], lon=coords[1]), station,
-                                                         i, coords, shr_mem, prog_mem,
-                                                         ) for i, coords in enumerate(coord_list))
+            Parallel(n_jobs=num_cores)(delayed(resample_for_gsee)(ds_tot.sel(lat=coords[0], lon=coords[1]), station,
+                                                                  i, coords, shr_mem, prog_mem,
+                                                                  ) for i, coords in enumerate(coord_list))
         elif use_PDFs and data_freq in ['A', 'S', 'M']:
             pdfs = xr.open_dataset(pdfs_file_path, autoclose=True)
             # convert values in PFDS from W to kW:
@@ -178,10 +181,10 @@ def run_interface(th_tuple: tuple, outfile: str, params: List[str],  df_tuple=('
             pdf_coords = list(product(pdfs['lat'].values, pdfs['lon'].values))
             tree = spatial.KDTree(pdf_coords)
             coord_list_NN = [pdf_coords[int(tree.query([x])[1])] for x in coord_list]
-            Parallel(n_jobs=num_cores)(delayed(run_gsee_pdfs)(ds_tot.sel(lat=coords[0], lon=coords[1]), station, i,
-                                                              coords, shr_mem, prog_mem,
-                                                              pdfs.sel(lat=coord_list_NN[i][0], lon=coord_list_NN[i][1])
-                                                              ) for i, coords in enumerate(coord_list))
+            Parallel(n_jobs=num_cores)(delayed(resample_for_gsee_with_pdfs)(ds_tot.sel(lat=coords[0], lon=coords[1]), station, i,
+                                                                            coords, shr_mem, prog_mem,
+                                                                            pdfs.sel(lat=coord_list_NN[i][0], lon=coord_list_NN[i][1])
+                                                                            ) for i, coords in enumerate(coord_list))
         else:
             raise ValueError('If use_PDFs is selected, use one of the following frequencies ["A", "S", "M"]')
         end = time.time()
