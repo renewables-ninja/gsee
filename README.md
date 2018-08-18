@@ -57,6 +57,17 @@ plane_irradiance = gsee.trigon.aperture_irradiance(
 )
 ```
 
+### Climate data Interface
+
+```python
+def run_interface(th_tuple=('~/th_file.nc', 'rsds'),
+                  outfile='~/outfile.nc4', params=[35, 180, 0, 1],
+                  df_tuple=('', ''), at_tuple=('', ''),
+                  in_freq='detect', timeformat='other', use_PDFs=True,
+                  th_factor=(1/1000)):
+```
+For more details read Doc/README_climdata-interface.md
+
 ## Development
 
 To install the latest development version directly from GitHub:
