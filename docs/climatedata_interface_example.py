@@ -31,4 +31,3 @@ th_factor = 1/1000 # GSEE requires kW
 inter.run_interface(th_tuple=(th_file, var_names[0]), df_tuple=(df_file, var_names[1]),
                     at_tuple=(at_file, var_names[2]), outfile=outfile, params=[tilt, azimuth, tracking, capacity],
                     in_freq=in_freq, timeformat=timeformat, use_PDFs=use_PDFs, th_factor=th_factor)
-

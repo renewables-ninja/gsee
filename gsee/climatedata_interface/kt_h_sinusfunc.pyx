@@ -4,13 +4,17 @@ cimport numpy as np
 import numpy as np
 
 cpdef double kt_h(double gsc, double lat, double n, double h, double Eo, double sunrise_h, double glob_h):
-    '''This Function calculates the atmospheric clearness index with tha extra-terrestrial radiation
-     at a location based on:
-    gsc: The solar constant
-    n: day of the year
-    Eo: Eccentricity coefficient
-    sunrise_h: hour at which sunrise takes place
-    glob_h: global horizontal radiation at that locatoin
+    '''
+    Computes the atmospheric clearness index with the extra-terrestrial radiation
+    at a given location based on:
+
+        gsc: solar constant
+        n: day of year
+        h: hour of day
+        Eo: Eccentricity coefficient
+        sunrise_h: hour at which sunrise takes place
+        glob_h: global horizontal radiation at that location
+
     '''
     cdef double H, w, Go, ws, sdec
     H = glob_h
@@ -31,6 +35,7 @@ cpdef np.ndarray[double] apply_kt_h(double gsc, double lat, np.ndarray col_n, np
     '''
     Iterates over each row of the given dataframe and applies a funtionc The dataframe is given in the
     form of ndarrays for each column. This is much faster than pandas.DataFrame.iterrows.
+
     '''
     cdef Py_ssize_t i, n = len(col_h)
     cdef np.ndarray[double] res = np.empty(n)
@@ -42,10 +47,12 @@ cpdef np.ndarray[double] apply_kt_h(double gsc, double lat, np.ndarray col_n, np
 cpdef csinus_func(double rise, double set, double h, double glob_h_day):
     '''
     Calculates hourly irradiance following a sunusoidal function based on:
-    rise: time of sunrise
-    set: time of sunset
-    h: hour at which to calculate irradiance
-    glob_h_day: total radiation of the whole day
+
+        rise: time of sunrise
+        set: time of sunset
+        h: hour at which to calculate irradiance
+        glob_h_day: total radiation over the entire day
+
     '''
     cdef double dt
     h = h + 0.5
@@ -73,10 +80,10 @@ cpdef np.ndarray[double] apply_csinus_func(np.ndarray col_rise, np.ndarray col_s
     '''
     Iterates over each row of the given dataframe and applies a funtionc The dataframe is given in the
     form of ndarrays for each column. This is much faster than pandas.DataFrame.iterrows.
+
     '''
     cdef Py_ssize_t i, n = len(col_h)
     cdef np.ndarray[double] res = np.empty(n)
     for i in range(len(col_h)):
         res[i] = csinus_func(col_rise[i], col_set[i], col_h[i], col_glob_h_day[i])
     return res
-
