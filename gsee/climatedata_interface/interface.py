@@ -1,9 +1,8 @@
 import xarray as xr
 import pandas as pd
 import numpy as np
-from joblib import Parallel, delayed
-from calendar import monthrange
 import multiprocessing
+from calendar import monthrange
 import os
 import time
 from scipy import spatial
@@ -19,25 +18,36 @@ def run_interface(th_tuple: tuple, outfile: str, params, df_tuple=('', ''), at_t
     """
     Important: GSEE uses kW, so th_factor is set to 1000 by default, as often data is in W.
     Input file must include 'time', 'lat' and 'lon' dimension.
-    :param th_tuple: Tuple with Filepath for .nc file with mean irradiance data (e.g. W/m2)
-     and variable name in that file
-    :param df_tuple: Tuple with Filepath for .nc file with diffuse fraction data and variable name in that file
-    :param at_tuple: Tuple with Filepath for .nc file with temperature data (°C or °K) and variable name in that file
-    :param outfile: Filepath where the output should be saved
-    :param params: List of the parameters for the GSEE [tilt, azimuth, tracking, capacity],
-     tilt can be a function depending on latitude! See example input.
-     Tracking can be 0, 1, 2 for no tracking, 1-axis tracking, 2-axis tracking
-    :param in_freq: Frequency of the input data. One of ['A', 'S', 'M', 'D', 'H']
-     for annual, seasonal, monthly, daily, hourly. Can also be 'detect' in that case the frequency is guessed,
-     works mostly except for seasonal data
-    :param timeformat: if 'cmip5' is given, then the dateformat common in the CMIP5 dataset
-     (e.g. '20070104.5') is converted. Otherwise its left to xarray to detect the time
-    :param use_PDFs: Option whether the probability density functions for each month should be used, onyl for annual,
-     seasonal and monthly data
-    :param th_factor: by which the total_horizontal irradiance is multiplied, e.g. to convert from W to kW
-    :param num_cores: number of cores that should be used for the computation, default is all of them
-    :param pdfs_file_path: Path to the file in which the PDFs are stored, if not passed it will use the internal file
+
+    Parameters
+    ----------
+    th_tuple: Tuple
+        with Filepath for .nc file with diffuse fraction data and variable name in that file
+    outfile: string
+        Filepath where the output should be saved
+    params: List
+        of the parameters for the GSEE [tilt, azimuth, tracking, capacity], tilt can be a function
+        depending on latitude! See example input.Tracking can be 0, 1, 2 for no tracking, 1-axis tracking, 2-axis tracking
+    df_tuple: Tuple
+        Tuple with Filepath for .nc file with diffuse fraction data and variable name in that file
+    at_tuple: Tuple
+        Tuple with Filepath for .nc file with temperature data (°C or °K) and variable name in that file
+    in_freq: string
+        Frequency of the input data. One of ['A', 'S', 'M', 'D', 'H'] for annual, seasonal, monthly, daily, hourly.
+        Can also be 'detect' in that case the frequency is guessed, works mostly except for seasonal data
+    timeformat: string
+        if 'cmip5' is given, then the dateformat common in the CMIP5 dataset (e.g. '20070104.5') is converted.
+        Otherwise its left to xarray to detect the time
+    use_PDFs: bool
+        If True, the probability density functions for each month are used. Only for annual, seasonal and monthly data
+    th_factor: float
+        by which the total_horizontal irradiance is multiplied, e.g. to convert from W to kW
+    num_cores: int
+        number of cores that should be used for the computation, default is all of them
+    pdfs_file_path: string
+        Path to the file in which the PDFs are stored, if not passed it will use the internal file
     """
+
     tilt, azim, tracking, capacity = params
 
     th_file, th_var = th_tuple
@@ -162,7 +172,7 @@ def run_interface(th_tuple: tuple, outfile: str, params, df_tuple=('', ''), at_t
     manager = multiprocessing.Manager()
 
     if not os.path.isfile(outfile):
-        print('Output file {} file does not yet exist --> Computing...'.format(outfile.split('/', -1)[-1]))
+        print('Output file {} file does not yet exist --> Computing in '.format(outfile.split('/', -1)[-1]), end='')
         # Shareable list with a place for every coordinate in the grid:
         shr_mem = manager.list([None] * len(tlat)*len(tlon))
         start = time.time()
@@ -170,9 +180,16 @@ def run_interface(th_tuple: tuple, outfile: str, params, df_tuple=('', ''), at_t
         # Store length of coordinate list in prog_mem to draw the progress bar dynamically:
         prog_mem.append(len(coord_list))
         if not use_PDFs:
-            Parallel(n_jobs=num_cores)(delayed(resample_for_gsee)(ds_tot.sel(lat=coords[0], lon=coords[1]), station,
-                                                                  i, coords, shr_mem, prog_mem,
+            if num_cores > 1:
+                print('Parallel mode: {} cores'.format(num_cores))
+                from joblib import Parallel, delayed
+                Parallel(n_jobs=num_cores)(delayed(resample_for_gsee)(ds_tot.sel(lat=coords[0], lon=coords[1]), station,
+                                                                  i, coords, shr_mem, prog_mem
                                                                   ) for i, coords in enumerate(coord_list))
+            else:
+                print('Single core mode')
+                for i, coords in enumerate(coord_list):
+                    resample_for_gsee(ds_tot.sel(lat=coords[0], lon=coords[1]), station, i, coords, shr_mem, prog_mem)
         elif use_PDFs and data_freq in ['A', 'S', 'M']:
             pdfs = xr.open_dataset(pdfs_file_path, autoclose=True)
             # convert values in PFDS from W to kW:
@@ -181,10 +198,19 @@ def run_interface(th_tuple: tuple, outfile: str, params, df_tuple=('', ''), at_t
             pdf_coords = list(product(pdfs['lat'].values, pdfs['lon'].values))
             tree = spatial.KDTree(pdf_coords)
             coord_list_NN = [pdf_coords[int(tree.query([x])[1])] for x in coord_list]
-            Parallel(n_jobs=num_cores)(delayed(resample_for_gsee_with_pdfs)(ds_tot.sel(lat=coords[0], lon=coords[1]), station, i,
-                                                                            coords, shr_mem, prog_mem,
-                                                                            pdfs.sel(lat=coord_list_NN[i][0], lon=coord_list_NN[i][1])
-                                                                            ) for i, coords in enumerate(coord_list))
+            if num_cores > 1:
+                print('Parallel mode: {} cores'.format(num_cores))
+                from joblib import Parallel, delayed
+                Parallel(n_jobs=num_cores)(delayed(resample_for_gsee_with_pdfs)(ds_tot.sel(lat=coords[0], lon=coords[1])
+                                                                                , station, i, coords, shr_mem, prog_mem,
+                                                                                pdfs.sel(lat=coord_list_NN[i][0],
+                                                                                         lon=coord_list_NN[i][1]))
+                                           for i, coords in enumerate(coord_list))
+            else:
+                print('Single core mode')
+                for i, coords in enumerate(coord_list):
+                    resample_for_gsee_with_pdfs(ds_tot.sel(lat=coords[0], lon=coords[1]), station, i, coords, shr_mem,
+                                                prog_mem, pdfs.sel(lat=coord_list_NN[i][0], lon=coord_list_NN[i][1]))
         else:
             raise ValueError('If use_PDFs is selected, use one of the following frequencies ["A", "S", "M"]')
         end = time.time()

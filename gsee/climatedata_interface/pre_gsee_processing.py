@@ -8,14 +8,25 @@ from calendar import monthrange
 from gsee.climatedata_interface import kt_h_sinusfunc as cyth
 from gsee import trigon, brl_model
 from gsee import pv as pv_model
+import copy
 
 
 def decimal_hours(timeobject, rise_or_set):
     """
-    :param timeobject: Sunrise or -set time
-    :param rise_or_set: string 'sunrise' or 'sunset' specifiying what timeobject is
-    :return: time of timeobject in decimal hours
+    Parameters
+    ----------
+    timeobject : datetime object
+        Sunrise or -set time
+    rise_or_set: string
+        'sunrise' or 'sunset' specifiying which of the two timeobject is
+    Returns
+    -------
+    float
+        time of timeobject in decimal hours
+
     """
+    assert rise_or_set == 'sunrise' or rise_or_set == 'sunset'
+
     if timeobject:
         ret =  timeobject.hour + timeobject.minute / 60
         if ret == 0:
@@ -32,22 +43,38 @@ def add_kd_run_gsee(df, station):
     """
     Calculates diffuse fraction with extraterrestrial radiation and Erb's model and creates
     sinusoidal durinal cycle to create an average day for each month
-    :param df: dataframe with single day per month and global_horizontal, temperature column
-    :param coords: tuple with (latitude,longitude)
-    :param station: object of type PVstation with tilt, azim, tracking, capacity attributes
-    :return:two np-arrays with pv-power and diffuse fraction in advancing time
+
+    Parameters
+    ----------
+    df : Pandas Dataframe
+        containing with single day per month and 'global_horizontal', 'temperature' column
+    station : object of type PVstation
+        containing coords, tilt, azimuth, tracking, capacity, data_freq information
+
+    Returns
+    -------
+    Pandas Series
+        containing column 'pv' with simulated PV power output
     """
 
     def _clearness_index_hourly(df, coords):
-        '''
+        """
         Calculates hourly clearness index and also adds sunrise and sunset to the dataframe
         as separate columns if not yet present. Following Equations from Elminir2007 (Prediction of hourly and daily
         diffuse fraction using neural network, as compared to linear regression models)
-        :param df: dataframe with columns: 'n', 'hour', 'Eo', 'sunrise_h', 'global_horizontal'
-        :param coordinates of location: tuple(lat, lon)
-        :return: dataframe with new column "kt_h" = hourly clearness index
-        '''
 
+        Parameters
+        ----------
+        df : Pandas Dataframe
+            containing columns: 'n', 'hour', 'Eo', 'sunrise_h', 'global_horizontal'
+        coords : Tuple
+            coordinates of pv station (lat, lon)
+
+        Returns
+        -------
+        Pandas Dataframe:
+            Same as df but with additional column "kt_h" = hourly clearness index
+        """
         lat = m.radians(coords[0])
         S = 1.367  # Solar constant in kW/m2
         df['kt_h'] = cyth.apply_kt_h(S, lat, df['n'].values, df['hour'].values,
@@ -58,17 +85,23 @@ def add_kd_run_gsee(df, station):
 
     def _convert_to_durinal(data, coords, factor=1):
         """
-        Upsamples data to hourly values by applying a sinusoidal function to the column 'global_horizontal',
-         simulating a diurnal cycle
-        :param data: Dataframe with datetimeindex and column 'global_horizontal'
-        :param coords: coordinates of PV panel
-        :param factor: by which the incoming data is multiplied, used to convert W to Wh/day
-        :return: Dataframe with hourly values and column 'global horizontal' following a sinusoidal function
+
+        Parameters
+        ----------
+        data : Pandas dataframe
+            with datetimeindex and column 'global_horizontal'
+        coords : Tuple
+            coordinates of pv station (lat, lon)
+        factor : int
+            by which the incoming data is multiplied, used to convert W to Wh/day
+        Returns
+        -------
+        Pandas dataframe
+            with hourly values and column 'global horizontal' following a sinusoidal function
         """
 
         def _upsample_df_single_day(indf):
-            """
-            Upsamples dataframe to hourly values but only fills the days that were in the original dataframe
+            """Upsamples dataframe to hourly values but only fills the days that were in the original dataframe
             and drops all other rows
             """
             df = indf.copy()
@@ -95,12 +128,23 @@ def add_kd_run_gsee(df, station):
         return daily
 
     def _ecc_corr(n):
-        '''
-        :param n: day of the year
-        :return: Eccentricity coefficient
-        '''
+        """
+        Parameters
+        ----------
+        n: int
+            day of the year
+
+        Returns
+        -------
+        float
+            Eccentricity coefficient
+        """
+
         t = (2 * m.pi * (n - 1)) / 365
-        Eo = (1.000110 + 0.034221 * m.cos(t) + 0.001280 * m.sin(t) + 0.000719 * m.cos(2 * t) + 0.00077 * m.sin(2 * t))
+        Eo = (1.000110 + 0.034221 * m.cos(t) +
+              0.001280 * m.sin(t) +
+              0.000719 * m.cos(2 * t) +
+              0.00077 * m.sin(2 * t))
         return Eo
 
     coords = station.coords
@@ -151,18 +195,27 @@ def add_kd_run_gsee(df, station):
 
 def resample_for_gsee(ds, instation, i, coords, shr_mem, prog_mem):
     """
-    Converts the incoming dataset to dataframe and pre-processes it depending on the temporal resolution
-    :param ds: xarray dataset with selected coordinates of coords, is now similar to a timeseries
-    :param instation: PVstation object where tilt has not been set yet, but all other atributes are
-    :param i: index where in shr_mem to save pv
-    :param coords: coordinates of pv station
-    :param shr_mem: shared memory where all the calculated pv time series are stored
-    :param prog_mem: list indicating the overall progress of the computation, first value ([0]) is the total number
-    of coordinate tuples to compute.
+    Converts the incoming dataset to dataframe and prepares if for GSEE it depending on the temporal resolution.
+
+    Parameters
+    ----------
+    ds : xarray dataser
+        containing timeseries data of selected coordinates (coords)
+    instation : Object of type PVstation
+        PVstation object where tilt has not been set yet, but all other attributes are
+    coords : Tuple
+        coordinates of pv station (lat, lon)
+    shr_mem : shared List
+        shared memory where all the calculated pv time series are stored
+    prog_mem : List
+        list indicating the overall progress of the computation, first value ([0]) is the total number
+        of coordinate tuples to compute.
     """
+
     df = ds.to_dataframe()
-    station = PVstation(instation.tilt(coords[0]), instation.azim, instation.tracking,
-                        instation.capacity, instation.data_freq)
+    station = copy.copy(instation)
+    if callable(instation.tilt):
+        station.tilt = instation.tilt(coords[0])
     station.coords = coords
     # Store data_freq in station object:
     data_freq = station.data_freq
@@ -197,24 +250,45 @@ def resample_for_gsee(ds, instation, i, coords, shr_mem, prog_mem):
 
 def resample_for_gsee_with_pdfs(ds, instation, i, coords, shr_mem, prog_mem, ds_pdfs):
     """
-    Converts the incoming dataset to dataframe and pre-processes it depending on the temporal resolution
-    :param ds: xarray dataset with selected coordinates of coords, is now similar to a timeseries
-    :param instation: PVstation object where tilt has not been set yet, but all other atributes are
-    :param i: index where in shr_mem to save pv
-    :param coords: coordinates of pv station
-    :param shr_mem: shared memory where all the calculated pv time series are stored
-    :param prog_mem: list indicating the overall progress of the computation, first value ([0]) is the total number
-    of coordinate tuples to compute.
-    :param ds_pdfs: xarray dataset with xk, pk values for selected coordinates
+    Converts the incoming dataset to dataframe and prepares if for GSEE it depending on the temporal resolution,
+    making use of the provide probability denstiy function.
+
+    Parameters
+    ----------
+    ds : xarray dataser
+        containing timeseries data of selected coordinates (coords)
+    instation : Object of type PVstation
+        PVstation object where tilt has not been set yet, but all other attributes are
+    coords : Tuple
+        coordinates of pv station (lat, lon)
+    shr_mem : shared List
+        shared memory where all the calculated pv time series are stored
+    prog_mem : List
+        list indicating the overall progress of the computation, first value ([0]) is the total number
+        of coordinate tuples to compute.
+    ds_pdfs : xarray dataset
+        containing xk, pk values for selected coordinates
     """
 
     def _create_rand_month(xk, pk, n):
         """
-        :param xk: array of bins of possible radiation values
-        :param pk: possiblities for the bins in xk to occur
-        :param n: length of month
-        :return: array of length n with randon values xk following the probabilites given in pk
+
+        Parameters
+        ----------
+        xk : List
+            of bins of possible radiation values
+        pk : List
+            Probabilities for the bins in xk to occur
+        n : int
+            length of the month in days
+
+        Returns
+        -------
+        List
+            of length n with randon values xk following the probabilites given in pk
+
         """
+
         multi = 10000  # multiplied as .rvs only gives integer values, but we want a higher resolution
         xk = xk * multi
 
@@ -230,8 +304,9 @@ def resample_for_gsee_with_pdfs(ds, instation, i, coords, shr_mem, prog_mem, ds_
             return np.full(n, 0)
 
     df = ds.to_dataframe()
-    station = PVstation(instation.tilt(coords[0]), instation.azim, instation.tracking,
-                        instation.capacity, instation.data_freq)
+    station = copy.copy(instation)
+    if callable(instation.tilt):
+        station.tilt = instation.tilt(coords[0])
     station.coords = coords
     df = df.drop(['lon', 'lat'], axis=1)
     data_freq = station.data_freq
@@ -293,20 +368,32 @@ def return_pv(pv, shr_mem, prog_mem, coords, i):
     """
     Does necessary stuff to pv to convert it back to xarray (adds lat, lon) and saves it to shr_mem
     also updates and draws progress bar
-    :param pv: pandas series with pv values calculated
-    :param shr_mem: shared memory where all the calculated pv time series are stored
-    :param prog_mem: list indicating the overall progress of the computation, first value ([0]) is the total number
+
+    Parameters
+    ----------
+    pv : Pandas series
+        containing calculated pv values
+    shr_mem : List
+        shared memory where all the calculated pv time series are stored
+    prog_mem : List
+        list indicating the overall progress of the computation, first value ([0]) is the total number
     of coordinate tuples to compute.
-    :param coords: coordinates of pv station
-    :param i: index where in shr_mem to save pv
+    coords : Tuple
+        coordinates of pv station (lat, lon)
+    i : int
+        index where in shr_mem to save pv, unique for every coordinate tuple
     """
 
-    def _progress_bar(current_length, total):
+    def _progress_bar(current_length: int, total: int):
         """
         Draws a progress bar in the terminal depending on:
-        :param current_length: Is the length of the shared memory list "prog_mem",
-         representing the number of processed coordinate tuples
-        :param total: is the total amount oc coordinate tuples to process
+
+        Parameters
+        ----------
+        current_length : int
+            Is the length of the shared memory list "prog_mem",
+        total : int
+            is the total amount oc coordinate tuples to process
         """
         curr = current_length - 1
         width = 75
