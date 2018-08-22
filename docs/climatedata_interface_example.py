@@ -4,6 +4,7 @@ import gsee.climatedata_interface.interface as inter
 
 basefolder = '/home/username/climate_data'
 
+
 th_file = '{}/sis-split-years2011-monmean.nc'.format(basefolder)
 df_file = '{}/df-split-years2011-monmean.nc'.format(basefolder)
 at_file = '{}/tas-split-years2011-monmean.nc'.format(basefolder)
@@ -22,12 +23,11 @@ tilt = tilt_function
 azimuth = 180
 tracking = 0
 capacity = 1
-params = [tilt, azimuth, tracking, capacity]
-
 in_freq = 'detect'
-use_PDFs = True
+params = {'tilt': tilt, 'azimuth': azimuth, 'tracking': tracking, 'capacity': capacity, 'data_freq': in_freq}
+use_pdfs = True
 th_factor = 1/1000 # GSEE requires kW
 
 inter.run_interface(th_tuple=(th_file, var_names[0]), df_tuple=(df_file, var_names[1]),
-                    at_tuple=(at_file, var_names[2]), outfile=outfile, params=[tilt, azimuth, tracking, capacity],
-                    in_freq=in_freq, timeformat=timeformat, use_PDFs=use_PDFs, th_factor=th_factor)
+                    at_tuple=(at_file, var_names[2]), outfile=outfile, params=params,
+                    timeformat=timeformat, use_pdfs=use_pdfs, th_factor=th_factor)

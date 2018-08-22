@@ -193,7 +193,7 @@ def add_kd_run_gsee(df, station):
     return pv
 
 
-def resample_for_gsee(ds, instation, i, coords, shr_mem, prog_mem):
+def resample_for_gsee(ds, params, i, coords, shr_mem, prog_mem):
     """
     Converts the incoming dataset to dataframe and prepares if for GSEE it depending on the temporal resolution.
 
@@ -213,9 +213,9 @@ def resample_for_gsee(ds, instation, i, coords, shr_mem, prog_mem):
     """
 
     df = ds.to_dataframe()
-    station = copy.copy(instation)
-    if callable(instation.tilt):
-        station.tilt = instation.tilt(coords[0])
+    station = PVstation(params['tilt'], params['azimuth'], params['tracking'], params['capacity'], params['data_freq'])
+    if callable(station.tilt):
+        station.tilt = station.tilt(coords[0])
     station.coords = coords
     # Store data_freq in station object:
     data_freq = station.data_freq
@@ -248,7 +248,7 @@ def resample_for_gsee(ds, instation, i, coords, shr_mem, prog_mem):
     return_pv(pv, shr_mem, prog_mem, coords, i)
 
 
-def resample_for_gsee_with_pdfs(ds, instation, i, coords, shr_mem, prog_mem, ds_pdfs):
+def resample_for_gsee_with_pdfs(ds, params, i, coords, shr_mem, prog_mem, ds_pdfs):
     """
     Converts the incoming dataset to dataframe and prepares if for GSEE it depending on the temporal resolution,
     making use of the provide probability denstiy function.
@@ -304,9 +304,9 @@ def resample_for_gsee_with_pdfs(ds, instation, i, coords, shr_mem, prog_mem, ds_
             return np.full(n, 0)
 
     df = ds.to_dataframe()
-    station = copy.copy(instation)
-    if callable(instation.tilt):
-        station.tilt = instation.tilt(coords[0])
+    station = PVstation(params['tilt'], params['azimuth'], params['tracking'], params['capacity'], params['data_freq'])
+    if callable(station.tilt):
+        station.tilt = station.tilt(coords[0])
     station.coords = coords
     df = df.drop(['lon', 'lat'], axis=1)
     data_freq = station.data_freq
