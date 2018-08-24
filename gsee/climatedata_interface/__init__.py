@@ -2,3 +2,4 @@ __title__ = 'gsee interface - use GSEE with annual, seasonal, monthly and daily 
 __author__ = 'Johannes Müller'
 
 from gsee.climatedata_interface import interface
+from gsee.climatedata_interface import monthly_pdfs

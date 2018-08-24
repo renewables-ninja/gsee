@@ -60,13 +60,17 @@ plane_irradiance = gsee.trigon.aperture_irradiance(
 ### Climate data Interface
 
 ```python
-def run_interface(th_tuple=('~/th_file.nc', 'rsds'),
-                  outfile='~/outfile.nc4', params=[35, 180, 0, 1],
-                  df_tuple=('', ''), at_tuple=('', ''),
-                  in_freq='detect', timeformat='other', use_PDFs=True,
-                  th_factor=(1/1000)):
+def run_interface(ghi_tuple: tuple, outfile: str, params, diffuse_tuple=('', ''),       
+                  temp_tuple=('', ''), timeformat='other', use_pdfs=True,
+                  rad_factor=(1 / 1000), pdfs_file_path='',
+                  num_cores=multiprocessing.cpu_count()):
 ```
-For more details read Doc/README_climdata-interface.md
+Instead of letting the script read and prepare the data, a xarray dataset can also be passed directly to the following function (e.g. when using the module in combination with a larger application):
+```python
+def run_interface_from_dataset(ds, params, use_pdfs=True, pdfs_file_path='',
+                              num_cores=multiprocessing.cpu_count()):
+```
+For more details read [docs/climatedata-interface.md](docs/climatedata-interface.md)
 
 ## Development
 

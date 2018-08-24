@@ -6,9 +6,9 @@ import sys
 import scipy.stats as st
 from calendar import monthrange
 from gsee.climatedata_interface import kt_h_sinusfunc as cyth
+from gsee.climatedata_interface.progress import progress_bar
 from gsee import trigon, brl_model
 from gsee import pv as pv_model
-import copy
 
 
 def decimal_hours(timeobject, rise_or_set):
@@ -326,7 +326,7 @@ def resample_for_gsee_with_pdfs(ds, params, i, coords, shr_mem, prog_mem, ds_pdf
     # Random days for each month are computed and stitched together to new dataframe:
     for j, row in df.iterrows():
         year = row.name.year
-        stmon = row.name.month
+        start_month = row.name.month
         n_months = 1
         if data_freq == 'A':
             n_months = 12
@@ -335,7 +335,7 @@ def resample_for_gsee_with_pdfs(ds, params, i, coords, shr_mem, prog_mem, ds_pdf
         rand_days_list = []
         temperatures = []
         monthlist = 2 * list(range(1, 13))
-        for mon in monthlist[stmon-1:stmon+n_months-1]:
+        for mon in monthlist[start_month - 1:start_month + n_months - 1]:
             days = monthrange(year, mon)[1]
             ds_pdfs_mon = ds_pdfs.sel(month=mon)
             rand_days = _create_rand_month(xk=ds_pdfs_mon['xk'].values, pk=ds_pdfs_mon['pk'].values,
@@ -345,7 +345,7 @@ def resample_for_gsee_with_pdfs(ds, params, i, coords, shr_mem, prog_mem, ds_pdf
                 temperatures.extend(np.full(days, row['temperature']))
         if any(rand_days_list):
             rand_days_list = [q * (row['global_horizontal'] / np.mean(rand_days_list)) for q in rand_days_list]
-        time_index = pd.date_range(start='{}-{}-01'.format(str(year), str(stmon)),
+        time_index = pd.date_range(start='{}-{}-01'.format(str(year), str(start_month)),
                                    periods=len(rand_days_list), freq='D')
         if 'temperature' in row:
             df_pdf = pd.DataFrame(data={'global_horizontal': rand_days_list, 'temperature': temperatures},
@@ -384,25 +384,6 @@ def return_pv(pv, shr_mem, prog_mem, coords, i):
         index where in shr_mem to save pv, unique for every coordinate tuple
     """
 
-    def _progress_bar(current_length: int, total: int):
-        """
-        Draws a progress bar in the terminal depending on:
-
-        Parameters
-        ----------
-        current_length : int
-            Is the length of the shared memory list "prog_mem",
-        total : int
-            is the total amount oc coordinate tuples to process
-        """
-        curr = current_length - 1
-        width = 75
-        fract = curr / total
-        progress = int(fract * width)
-        left = width - progress
-        sys.stdout.write('\r\t[{}{}{}] {}%'.format((progress - 2) * '=', 2 * '>', left * ' ', round(fract * 100)))
-        sys.stdout.flush()
-
     pv = pv.to_frame()
     pv.columns = ['pv']
     pv.reset_index(inplace=True)
@@ -412,7 +393,7 @@ def return_pv(pv, shr_mem, prog_mem, coords, i):
     shr_mem[i] = pv.to_xarray()
     prog_mem.append(1)
     len_coord_list = prog_mem[0]
-    _progress_bar(len(prog_mem), len_coord_list)
+    progress_bar(len(prog_mem), len_coord_list)
 
 
 class PVstation:

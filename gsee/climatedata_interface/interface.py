@@ -10,9 +10,8 @@ from itertools import product
 from gsee.climatedata_interface.pre_gsee_processing import resample_for_gsee, resample_for_gsee_with_pdfs, PVstation
 
 
-def run_interface_from_dataset(ds, params, use_pdfs=True, num_cores=multiprocessing.cpu_count(),
-                               pdfs_file_path='{}/PDFs/MERRA2_rad3x3_2011-2015-PDFs_land_prox.nc4'
-                               .format(os.path.dirname(os.path.abspath(__file__)))):
+def run_interface_from_dataset(ds, params, use_pdfs=True, pdfs_file_path='',
+                               num_cores=multiprocessing.cpu_count()):
     """
 
     Parameters
@@ -30,7 +29,7 @@ def run_interface_from_dataset(ds, params, use_pdfs=True, num_cores=multiprocess
     num_cores: int
         number of cores that should be used for the computation, default is all of them
     pdfs_file_path: string
-        Path to the file in which the PDFs are stored, if not passed it will use the internal file
+        Path to the file in which the PDFs are stored.
 
     Returns
     -------
@@ -63,12 +62,12 @@ def run_interface_from_dataset(ds, params, use_pdfs=True, num_cores=multiprocess
         list_nn = [pdf_coords[int(tree.query([x])[1])] for x in in_coord_list]
         return out_pdfs, list_nn
 
-    def _mod_time_dim(na_time, freq):
+    def _mod_time_dim(time_dim, freq: str):
         """
         Modify Time dimension so it fits the requirements of the "resample_for_gsee" function
         Parameters
         ----------
-        na_time: array
+        time_dim: array
             with datetime entries
         freq: string
             representing data frequency of na_time
@@ -80,16 +79,16 @@ def run_interface_from_dataset(ds, params, use_pdfs=True, num_cores=multiprocess
         """
         if freq == 'A':
             # Annual data is set to the beginning of the year
-            return na_time.map(lambda x: pd.Timestamp(year=x.year, month=1, day=1, hour=0, minute=0))
+            return time_dim.map(lambda x: pd.Timestamp(year=x.year, month=1, day=1, hour=0, minute=0))
         elif freq in ['S', 'M']:
             # Seasonal data is set to middle of month, as it is often represented with the day in the middle of the season.
             # Monthly data is set to middle of month
-            return na_time.map(lambda x: pd.Timestamp(year=x.year, month=x.month,
-                                                            day=int(monthrange(x.year, x.month)[1] / 2), hour=0,
-                                                            minute=0))
+            return time_dim.map(lambda x: pd.Timestamp(year=x.year, month=x.month,
+                                                       day=int(monthrange(x.year, x.month)[1] / 2), hour=0,
+                                                       minute=0))
         elif freq == 'D':
             # Daily data is set to 00:00 hours of the day
-            return na_time.map(lambda x: pd.Timestamp(year=x.year, month=x.month, day=x.day, hour=0, minute=0))
+            return time_dim.map(lambda x: pd.Timestamp(year=x.year, month=x.month, day=x.day, hour=0, minute=0))
 
 
     # Create list of all (lat, lon) pairs to be processed:
@@ -161,18 +160,16 @@ def run_interface_from_dataset(ds, params, use_pdfs=True, num_cores=multiprocess
     return ds_pv
 
 
-def run_interface(th_tuple: tuple, outfile: str, params, df_tuple=('', ''), at_tuple=('', ''),
-                  timeformat='other', use_pdfs=True, th_factor=1 / 1000,
-                  num_cores=multiprocessing.cpu_count(),
-                  pdfs_file_path='{}/PDFs/MERRA2_rad3x3_2011-2015-PDFs_land_prox.nc4'
-                  .format(os.path.dirname(os.path.abspath(__file__)))):
+def run_interface(ghi_tuple: tuple, outfile: str, params, diffuse_tuple=('', ''), temp_tuple=('', ''),
+                  timeformat='other', use_pdfs=True, rad_factor=1 / 1000,
+                  pdfs_file_path='', num_cores=multiprocessing.cpu_count()):
     """
     Important: GSEE uses kW, so th_factor is set to 1000 by default, as often data is in W.
     Input file must include 'time', 'lat' and 'lon' dimension.
 
     Parameters
     ----------
-    th_tuple: Tuple
+    ghi_tuple: Tuple
         with Filepath for .nc file with diffuse fraction data and variable name in that file
     outfile: string
         Filepath where the output should be saved
@@ -181,21 +178,21 @@ def run_interface(th_tuple: tuple, outfile: str, params, df_tuple=('', ''), at_t
         tilt can be a function depending on latitude! See example input.Tracking can be 0, 1, 2 for no tracking,
         1-axis tracking, 2-axis tracking. 'data_freq': Frequency of the input data. One of ['A', 'S', 'M', 'D', 'H'] for annual, seasonal, monthly, daily, hourly.
         Can also be 'detect' in that case the frequency is guessed, works mostly except for seasonal data
-    df_tuple: Tuple
+    diffuse_tuple: Tuple
         Tuple with Filepath for .nc file with diffuse fraction data and variable name in that file
-    at_tuple: Tuple
+    temp_tuple: Tuple
         Tuple with Filepath for .nc file with temperature data (°C or °K) and variable name in that file
     timeformat: string
         if 'cmip5' is given, then the dateformat common in the CMIP5 dataset (e.g. '20070104.5') is converted.
         Otherwise its left to xarray to detect the time
     use_pdfs: bool
         If True, the probability density functions for each month are used. Only for annual, seasonal and monthly data
-    th_factor: float
+    rad_factor: float
         by which the total_horizontal irradiance is multiplied, e.g. to convert from W to kW
     num_cores: int
         number of cores that should be used for the computation, default is all of them
     pdfs_file_path: string
-        Path to the file in which the PDFs are stored, if not passed it will use the internal file
+        Path to the file in which the PDFs are stored.
     """
 
     def _detect_frequency(ds, in_freq):
@@ -226,9 +223,9 @@ def run_interface(th_tuple: tuple, outfile: str, params, df_tuple=('', ''), at_t
             except:
                 pass
         if not nc_freq:
-            print('> No frequency detected --> checking manual entry')
+            print('> No frequency detected --> checking manual entry', end='')
             if in_freq in ['A', 'S', 'M', 'D', 'H']:
-                print('....Manual entry is valid')
+                print('...Manual entry is valid')
                 data_freq = in_freq
         else:
             if nc_freq == 'year':
@@ -269,19 +266,19 @@ def run_interface(th_tuple: tuple, outfile: str, params, df_tuple=('', ''), at_t
         except:
             raise RuntimeError('Parsing of "cmip5" time-dimension failed. Take "other" as timeformat or check data.')
 
-    def _open_files(th_tuple, df_tuple, at_tuple, th_factor):
+    def _open_files(ghi_tuple, diffuse_tuple, temp_tuple, rad_factor):
         """
         Opens the given files for GHI, diffuse Fraction and temperature, extracts the corresponding variables
         and merges all three together to one dataset.
         Parameters
         ----------
-        th_tuple: Tuple
+        ghi_tuple: Tuple
             with Filepath for .nc file with diffuse fraction data and variable name in that file
-        df_tuple: Tuple
+        diffuse_tuple: Tuple
             Tuple with Filepath for .nc file with diffuse fraction data and variable name in that file
-        at_tuple: Tuple
+        temp_tuple: Tuple
             Tuple with Filepath for .nc file with temperature data (°C or °K) and variable name in that file
-        th_factor: float
+        rad_factor: float
             by which the total_horizontal irradiance is multiplied, e.g. to convert from W to kW
 
         Returns
@@ -291,69 +288,69 @@ def run_interface(th_tuple: tuple, outfile: str, params, df_tuple=('', ''), at_t
         ds_th_in: xarray dataset
             dataset of input file without any being processed. Is used later to detect frequency
         """
-        th_file, th_var = th_tuple
-        df_file, df_var = df_tuple
-        at_file, at_var = at_tuple
+        ghi_file, ghi_var = ghi_tuple
+        diffuse_file, diffuse_var = diffuse_tuple
+        temp_file, temp_var = temp_tuple
 
         try:
-            ds_th_in = xr.open_dataset(th_file, autoclose=True)
+            ds_ghi_in = xr.open_dataset(ghi_file, autoclose=True)
         except:
             raise FileNotFoundError('Radiation file not found')
 
         # makes sure only the specified variable gets used further:
-        ds_th = ds_th_in[th_var].to_dataset()
+        ds_ghi = ds_ghi_in[ghi_var].to_dataset()
         # converts the values of radiation according to the given factor
-        ds_tot = ds_th * th_factor
-        ds_tot.rename({th_var: 'global_horizontal'}, inplace=True)
+        ds_merged = ds_ghi * rad_factor
+        ds_merged.rename({ghi_var: 'global_horizontal'}, inplace=True)
 
         # Open diffuse_fraction file:
         try:
-            ds_df_in = xr.open_dataset(df_file, autoclose=True)
-            ds_df = ds_df_in[df_var].to_dataset()
-            if ds_th.dims != ds_df.dims:
+            ds_diffuse_in = xr.open_dataset(diffuse_file, autoclose=True)
+            ds_diffuse = ds_diffuse_in[diffuse_var].to_dataset()
+            if ds_ghi.dims != ds_diffuse.dims:
                 raise ValueError('Dimension of diffuse fraciton file does not match radiation file')
-            ds_tot = xr.merge([ds_tot, ds_df])
-            ds_tot.rename({df_var: 'diffuse_fraction'}, inplace=True)
+            ds_merged = xr.merge([ds_merged, ds_diffuse])
+            ds_merged.rename({diffuse_var: 'diffuse_fraction'}, inplace=True)
 
         except OSError:
             print('> No diffuse fraction file found -> will calculate with BRL-Model')
         # Open temperature file:
         try:
-            ds_at_in = xr.open_dataset(at_file, autoclose=True)
-            ds_at = ds_at_in[at_var].to_dataset()
-            if ds_at[at_var].mean().values > 200:
+            ds_temp_in = xr.open_dataset(temp_file, autoclose=True)
+            ds_temp = ds_temp_in[temp_var].to_dataset()
+            if ds_temp[temp_var].mean().values > 200:
                 print('> Average temperature above 200° detected --> will convert to °C')
-                ds_at = ds_at - 273.15  # convert form kelvin to celsius
-            if ds_th.dims != ds_at.dims:
+                ds_temp = ds_temp - 273.15  # convert form kelvin to celsius
+            if ds_ghi.dims != ds_temp.dims:
                 raise ValueError('Dimension of temperature file does not match radiation file')
-            ds_tot = xr.merge([ds_tot, ds_at])
-            ds_tot.rename({at_var: 'temperature'}, inplace=True)
+            ds_merged = xr.merge([ds_merged, ds_temp])
+            ds_merged.rename({temp_var: 'temperature'}, inplace=True)
 
         except OSError:
             print('> No temperature file found -> will assume 20°C default value')
 
-        assert ds_tot.dims == ds_th.dims
+        assert ds_merged.dims == ds_ghi.dims
 
-        return ds_tot, ds_th_in
+        return ds_merged, ds_ghi_in
 
     # Read Files:
-    ds_tot, ds_in = _open_files(th_tuple, df_tuple, at_tuple, th_factor)
+    ds_merged, ds_in = _open_files(ghi_tuple, diffuse_tuple, temp_tuple, rad_factor)
     # Tries to detect frequency, otherwise falls back to manual entry, also compares if the two match:
     params['data_freq'] = _detect_frequency(ds_in, params['data_freq'])
 
     # If 'cmip5' is given the string of the form %Y%m%d.%f will be transformed to datetime object
     if timeformat == 'cmip5':
-        ds_tot['time'] = _parse_cmip_time_data(ds_tot)
+        ds_merged['time'] = _parse_cmip_time_data(ds_merged)
 
     # Check whether the time dimension was recognised correctly and interpreted as time by dataset
-    if not type(ds_tot['time'].values[0]) is np.datetime64:
+    if not type(ds_merged['time'].values[0]) is np.datetime64:
         raise TypeError('Time format not recognisable, select "cmip5" as timeformat input or provide other datafile')
 
     if not os.path.isfile(outfile):
         print('Output file {} file does not yet exist --> Computing in '.format(outfile.split('/', -1)[-1]), end='')
 
-        ds_pv = run_interface_from_dataset(ds=ds_tot, params=params, use_pdfs=use_pdfs, num_cores=num_cores,
-                                           pdfs_file_path=pdfs_file_path)
+        ds_pv = run_interface_from_dataset(ds=ds_merged, params=params, use_pdfs=use_pdfs,
+                                           pdfs_file_path=pdfs_file_path, num_cores=num_cores)
 
         for var in ds_in.data_vars:
             if var == 'time_bnds':

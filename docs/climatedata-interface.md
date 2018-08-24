@@ -22,28 +22,35 @@ The provided data files must be in the the ```netCDF``` format and contain at le
 The main function has the following parameters: (imported with ```import gsee.climdata_interface.interface```)
 
 ```python
-def run_interface(th_tuple: tuple, outfile: str, params: List[str],
-                  df_tuple=('', ''), at_tuple=('', ''),
-                  in_freq='detect', timeformat='other', use_PDFs=True,
-                  th_factor=1/1000, num_cores=multiprocessing.cpu_count()):
+def run_interface(ghi_tuple: tuple, outfile: str, params, diffuse_tuple=('', ''),       
+                  temp_tuple=('', ''), timeformat='other', use_pdfs=True,
+                  rad_factor=(1 / 1000), pdfs_file_path='',
+                  num_cores=multiprocessing.cpu_count()):
 ```
 
 **Required Parameters:**
 
-* __`th_tuple`__: Tuple containing the filepath and the name of the data-variable for the mean total horizontal solar iradiance. E.g. `('/home/user/data/th_solar_.nc', 'rsds')`
+* __`ghi_tuple`__: Tuple containing the filepath and the name of the data-variable for the mean total horizontal solar iradiance. E.g. `('/home/user/data/th_solar_.nc', 'rsds')`
 * __`outfile`__: File path and name for the output file. E.g. */home/username/GSEE/output-file.nc*
-* __`parameters`__: List of strings containing parameters for the GSEE in the following order `['tilt', 'azimuth', 'tracking', 'capacity']`. Instead of a number you can also pass a function depending on latitute for `tilt`, see Example.
+* __`params`__: Dictionary, containing entries for each parameter used by the GSEE: `'tilt', 'azimuth', 'tracking', 'capacity'`. Additionally `'data_freq'` is also stored in this dict. Temporal resolution of the input data. Accepts the following strings: `['A', 'S', 'M', 'D', 'H']`, which stand for *annual, seasonal, monthly, daily, hourly* data. Also `'detect'` can be stored in `'data_freq'` then the script will try to guess the frequency from the input data. Instead of a number you can also pass a function depending on latitute for `tilt`, see Example.
 
 **Optional Paramters:**
 
-* __`df_tuple`__: Tuple containing the filepath and the name of the data-variable for the diffuse fraction. Only usefull when horizontal irradianceis provided in hourly resolution. With higher temporal resolutions, the diffuse fraction is estimated anyways with the BRL-model (`from gsee import brl_model`)
-* __`at_tuple`__: Tuple containing the filepath and the name of the data-variable for the ambient temperature. Can be in °C or °K. If no ambient temperature is provided, GSEE will assume 20°C by default.
-*  __`in_freq`__: Temporal resolution of the input data. Accepts the following strings: `['A', 'S', 'M', 'D', 'H']`, which stand for *annual, seasonal, monthly, daily, hourly* data. If no argument is passed  the program tries to guess the resolution from the input data. Works in many cases, however not for seasonal data.
+* __`diffuse_tuple`__: Tuple containing the filepath and the name of the data-variable for the diffuse fraction. Only usefull when horizontal irradianceis provided in hourly resolution. With higher temporal resolutions, the diffuse fraction is estimated anyways with the BRL-model (`from gsee import brl_model`)
+* __`temp_tuple`__: Tuple containing the filepath and the name of the data-variable for the ambient temperature. Can be in °C or °K. If no ambient temperature is provided, GSEE will assume 20°C by default.
 * __`timeformat`__: Some CMIP5 datasets have time saved in the format: *day as %Y%m%d.%f* (e.g. '20070104.5'). Xarray cannot parse this dataformat. If that is the case, `'cmip5'` can be passed and the dates will be correctly interpreted.
 * __`use_PDFs`__: Boolean. Toggle option whether to use the characteristic probability density functions or not.
-* __`th_factor`__: Factor by which the radiation of the input file is multiplied with. The GSEE requires **kW** and as almost all data for irradiance is given in **W**, the default factor is *1/1000*.
-* __`num_cores`__: By default all CPU-cores are used. However this can be limited here.
-* __``pdfs_file_path``__: Path to the file in which the PDFs are stored, if not passed it will use the internal file.
+* __`rad_factor`__: Factor by which the radiation of the input file is multiplied with. The GSEE requires **kW** and as almost all data for irradiance is given in **W**, the default factor is *1/1000*.
+* __`num_cores`__: By default all CPU-cores are used. However this can be limited here. If `1` is passed, then no parallelization will be used.
+* __``pdfs_file_path``__: Path to the file in which the PDFs are stored.
+
+#### Passing a dataset directly
+Instead of letting the script read and prepare the data, a xarray dataset can also be passed directly to the following function (e.g. when using the module in combination with a larger application):
+```python
+def run_interface_from_dataset(ds, params, use_pdfs=True, pdfs_file_path='',
+                              num_cores=multiprocessing.cpu_count()):
+```
+* __`ds`__: xarray dataset containing at lest one variable 'global_horizontal' with mean global horizontal irradiance in kW/m2. Optional variables: 'diffuse_fraction', 'temperature' in °C.
 
 #### Pre-Processing the climate data for the gsee
 Depending on the temporal resolution of the input data and chosen options, the interface applies different methods to ready the data for the GSEE.
@@ -70,44 +77,62 @@ The climatdata-interface outputs the data in the same resolution as the input da
 The following scripts should serve as an example of parameters with which the interface can be used.
 
 ```python
-#!/usr/bin/python
+import gsee.climatedata_interface.interface as inter
 
-import gsee.climdata_interface.interface as inter
+basefolder = '/home/username/climate_data'
 
-basefolder = '/home/username/data/sis-dni-tas-NN'
+th_file = '{}/sis-split-years2011-monmean.nc'.format(basefolder)
+df_file = '{}/df-split-years2011-monmean.nc'.format(basefolder)
+at_file = '{}/tas-split-years2011-monmean.nc'.format(basefolder)
 
-#th-tuple:
-th_tuple = ('{}/sis-2011-monmean.nc'.format(basefolder), 'SIS')
-#df-tuple: Diffuse fraction is only used when calculating hourly data, otherwise automatically estimated with BRL-model
-df_tuple = ('{}/df-2011-monmean.nc'.format(basefolder), 'df')
-#at-tuple:
-at_tuple = ('{}/tas-2011-monmean.nc'.format(basefolder), 'T2M')
+var_names = ['SIS', 'df', 'T2M']
 
-#outfile:
-outfile = '{}/output-monmean-pdfs-new.nc'.format(basefolder)
+outfile = '{}/outputs.nc4'.format(basefolder)
 
-timeformat = 'other' #'cmip5' # two options: 'cmip5-datestring': date as number e.g. 20071215.5 or 'other':whatever xarray reads in
+timeformat = 'other'
 
-#Paramters: A function of tilt depending on lat can be privided, or simply a fixed value returned
+# A function of tilt depending on lat can be provided, or simply a fixed value returned:
 def tilt_function(lat):
     return 0.353959636801573 * lat + 16.8477501393928
-tilt = tilt_function
-azimuth = 180
-tracking = 0
-capacity = 1
-params =[tilt, azimuth, tracking, capacity]
 
-#in_freq:
-data_freq = 'detect' # is either 'A', 'S', 'M', 'D', 'H' or 'detect' mostly detects everything but seasonal
-use_PDFs = True
-th_factor = 1/1000 #GSEE requires kW
+params = {'tilt': tilt_function, 'azimuth': 180, 'tracking': 0, 'capacity': 1, 'data_freq': 'detect'}
+use_pdfs = True
+th_factor = 1/1000 # GSEE requires kW
+pdfs_file_path='/home/username/PDFs/MERRA2_rad3x3_2011-2015-PDFs_land_prox.nc4'
 
-inter.run_interface(th_tuple=th_tuple, df_tuple=df_tuple, at_tuple=at_tuple,
-                        outfile=outfile, params=params, in_freq=data_freq, timeformat=timeformat,
-                        use_PDFs=use_PDFs, th_factor=th_factor)
+inter.run_interface(ghi_tuple=(th_file, var_names[0]), diffuse_tuple=(df_file, var_names[1]),
+                    temp_tuple=(at_file, var_names[2]), outfile=outfile, params=params,
+                    timeformat=timeformat, use_pdfs=use_pdfs, rad_factor=th_factor,
+                    pdfs_file_path=pdfs_file_path)
 ```
 
+#### Optaining monthly probability density functions (PDFs)
 
+When installed with the pip command one dataset of monthly PDFs will be included in the package. These PDFs are based on NASAs MERRA-2 'SWGDN' (surface incoming shortwave flux) field from 2011-2016, remapped to a 3°x3° grid and filtered for grid-cells in proximity of land masses. With `gsee.climdata_interface.create_pdfs_from_ds` additional datasets with other base data and higher resolution can be processed to create a custom set of PDFs.
+```Python
+def create_pdfs_from_ds(ds, outfile, only_land=True, proximity=True, lat_bounds=(-60, 75)):
+  """
+Creates new file contaning the probabiliy densitiy functions for each month of how often a specific amount of
+radation can occur. This is done for every grid-cell from the incoming dataset.
+
+Parameters
+----------
+ds: xarray dataset
+    with 'time', 'lat', 'lon' dimensions and data-variable 'SWGDN'
+outfile: string
+    path and filename where the resulting file should be stored. Must end with .nc4
+only_land: bool
+    If true: only gridcells whose center is on land will be computed. False: all cells are computed
+proximity: bool
+    If true: A cell is also computed if one of the surrounding cells is land. This makes shure that all coastal
+    regions are included, as sometimes the middle of a gridcell can be on the ocean, but still a great part is
+    on land. Without this option, all these cases would not be included.
+lat_bounds: Tuple
+    containing boundaries for the latitude to be included in the resulting datset. All latitudes between the two
+    values of the tuple will be inlcuded.
+"""
+
+```
 ##### References
 
 * Elminir, H. K., Y. A. Azzam, and F. I. Younes, 2007: Prediction of hourly and daily diffuse fraction using neural network, as compared to linear regression models. Energy, 32, 1513–1523, [doi:10.1016/j.energy.2006.10.010](http://dx.doi.org/10.1016/j.energy.2006.10.010)
