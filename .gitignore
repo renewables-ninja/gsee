@@ -1,4 +1,11 @@
 *.pyc
 *.egg-info
+.eggs/
 build/
 dist/
+*.html
+.idea/*
+*.so
+*.cache/
+*.pkl
+*_local.py

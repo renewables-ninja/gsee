@@ -19,4 +19,4 @@ clean :
 	rm dist/*
 
 .PHONY : all-dist
-all-dist : ddist upload clean
+all-dist : dist upload clean
