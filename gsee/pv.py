@@ -27,14 +27,14 @@ from gsee import trigon
 # Constants
 R_TAMB = 20  # Reference ambient temperature (degC)
 R_TMOD = 25  # Reference module temperature (degC)
-R_IRRADIANCE = 1  # Reference irradiance (kW/m2)
+R_IRRADIANCE = 1000  # Reference irradiance (W/m2)
 
 
 class PVPanel(object):
     """
     PV panel model class
 
-    Unit for power is kW, for energy, kWh.
+    Unit for power is W, for energy, Wh.
 
     By default, self.module_aperture is set to 1.0, so the output will
     correspond to output per m2 of solar field given the other
@@ -48,15 +48,15 @@ class PVPanel(object):
         Reference conversion efficiency
     c_temp_amb: float, default 1 degC / degC
         Panel temperature coefficient of ambient temperature
-    c_temp_irrad: float, default 35 degC / (kW/m2)
+    c_temp_irrad: float, default 0.035 degC / (W/m2)
         Panel temperature coefficient of irradiance. According to {1},
         reasonable values for this for c-Si are:
-            35  # Free-standing module, assuming no wind
-            50  # Building-integrated module
+            0.035  # Free-standing module, assuming no wind
+            0.05   # Building-integrated module
 
     """
     def __init__(self, panel_aperture=1.0, panel_ref_efficiency=1.0,
-                 c_temp_amb=1, c_temp_irrad=35):
+                 c_temp_amb=1, c_temp_irrad=0.035):
         super().__init__()
         # Panel characteristics
         self.panel_aperture = panel_aperture
@@ -68,14 +68,14 @@ class PVPanel(object):
 
     def panel_power(self, direct, diffuse=None, tamb=None):
         """
-        Returns power in kW from PV panel(s) based on given input data.
+        Returns electricity in W from PV panel(s) based on given input data.
 
         Parameters
         ----------
         direct : pandas Series
-            Direct irradiance hitting the panel(s) in kW/m2.
+            Direct irradiance hitting the panel(s) in W/m2.
         diffuse : pandas Series, default None
-            Diffuse irradiance hitting the panel(s) in kW/m2.
+            Diffuse irradiance hitting the panel(s) in W/m2.
         tamb : pandas Series, default None
             Ambient temperature in deg C. If not given, R_TAMB is used
             for all values.
@@ -104,7 +104,7 @@ class PVPanel(object):
         Parameters
         ----------
         irradiance : pandas Series
-            Irradiance in kW
+            Irradiance in W
         tamb : pandas Series
             Ambient temperature in deg C
 
@@ -170,7 +170,7 @@ def run_model(
     Parameters
     ----------
     data : pandas DataFrame
-        Must contain columns 'global_horizontal' (in kW/m2)
+        Must contain columns 'global_horizontal' (in W/m2)
         and 'diffuse_fraction', and may contain a 'temperature' column
         for ambient air temperature (in deg C).
     coords : (float, float) tuple
@@ -182,7 +182,7 @@ def run_model(
     tracking : int
         Tracking (0: none, 1: 1-axis, 2: 2-axis).
     capacity : float
-        Installed capacity in kW.
+        Installed capacity in W.
     technology : str, default 'csi'
         Panel technology, must be one of 'csi', 'cdte', 'cpv'
     system_loss : float, default 0.10
@@ -197,7 +197,7 @@ def run_model(
     Returns
     -------
     result : pandas Series
-        The PV system output in kW for each hour.
+        Electric output from PV system in W per hour.
 
     """
     if (system_loss < 0) or (system_loss > 1):

@@ -1,8 +1,13 @@
 # Release History
 
+## 0.3.0 (dev)
+
+* Added: climate data interface
+* Modified: PV model now expects inputs as W, not kW
+
 ## 0.2.0 (2018-08-10)
 
-* Add PyPI package
+* PyPI package
 * Minor bug fixes
 
 ## 0.1.0 (2016-09-01)

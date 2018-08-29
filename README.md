@@ -6,9 +6,12 @@
 
 Works only with Python 3. Required libraries:
 
-* [pyephem](http://rhodesmill.org/pyephem/)
-* [numpy](http://www.numpy.org/)
-* [pandas](http://pandas.pydata.org/)
+* [pyephem](https://pypi.org/project/ephem/)
+* [numpy](https://numpy.org/)
+* [scipy](https://scipy.org/)
+* [pandas](https://pandas.pydata.org/)
+* [xarray](https://xarray.pydata.org/)
+* [joblib](https://pypi.org/project/joblib/)
 
 ## Installation
 
@@ -16,15 +19,16 @@ Simply install with `pip`:
 
     pip install gsee
 
-The recommended way to get the required numpy and pandas libraries is to use the [Anaconda Python distribution](https://www.continuum.io/downloads).
+The recommended way to install the required scientific libraries is to use the [Anaconda Python distribution](https://www.continuum.io/downloads).
 
 ## Functionality
 
 The following submodules are available:
 
+* __``brl_model``__: an implementation of the BRL model, a method to derive the diffuse fraction of irradiance, based on Ridley et al. (2010)
+* __``climatedata_interface``__: an interface to use GSEE with annual, seasonal, monthly or daily data. See [docs/climatedata_interface](docs/climatedata_interface.md) for details.
 * __``pv``__: electric output from PV a panel
 * __``trigon``__: functions to calculate irradiance on an inclined plane
-* __``brl_model``__: an implementation of the BRL model, a method to derive the diffuse fraction of irradiance, based on Ridley et al. (2010)
 
 A model can be imported like this: ``import gsee.pv``
 
@@ -60,23 +64,28 @@ plane_irradiance = gsee.trigon.aperture_irradiance(
 ### Climate data Interface
 
 ```python
-def run_interface(ghi_tuple: tuple, outfile: str, params, diffuse_tuple=('', ''),       
+def run_interface(ghi_tuple: tuple, outfile: str, params, diffuse_tuple=('', ''),
                   temp_tuple=('', ''), timeformat='other', use_pdfs=True,
                   rad_factor=(1 / 1000), pdfs_file_path='',
                   num_cores=multiprocessing.cpu_count()):
 ```
+
 Instead of letting the script read and prepare the data, a xarray dataset can also be passed directly to the following function (e.g. when using the module in combination with a larger application):
+
 ```python
 def run_interface_from_dataset(ds, params, use_pdfs=True, pdfs_file_path='',
                               num_cores=multiprocessing.cpu_count()):
 ```
-For more details read [docs/climatedata-interface.md](docs/climatedata-interface.md)
+
+For more information, see the [climate data interface documentation](docs/climatedata-interface.md).
 
 ## Development
 
 To install the latest development version directly from GitHub:
 
     pip install -e git+https://github.com/renewables-ninja/gsee.git#egg=gsee
+
+To build the climatedata_interface submodule, [Cython](http://cython.org/) (>= 0.27.3) is required.
 
 ## Credits and contact
 
