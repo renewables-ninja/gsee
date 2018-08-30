@@ -66,8 +66,7 @@ plane_irradiance = gsee.trigon.aperture_irradiance(
 ```python
 def run_interface(ghi_tuple: tuple, outfile: str, params, diffuse_tuple=('', ''),
                   temp_tuple=('', ''), timeformat='other', use_pdfs=True,
-                  rad_factor=(1 / 1000), pdfs_file_path='',
-                  num_cores=multiprocessing.cpu_count()):
+                  pdfs_file_path='', num_cores=multiprocessing.cpu_count()):
 ```
 
 Instead of letting the script read and prepare the data, a xarray dataset can also be passed directly to the following function (e.g. when using the module in combination with a larger application):

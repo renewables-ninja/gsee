@@ -40,7 +40,6 @@ def run_interface(ghi_tuple: tuple, outfile: str, params, diffuse_tuple=('', '')
 * __`temp_tuple`__: Tuple containing the filepath and the name of the data-variable for the ambient temperature. Can be in °C or °K. If no ambient temperature is provided, GSEE will assume 20°C by default.
 * __`timeformat`__: Some CMIP5 datasets have time saved in the format: *day as %Y%m%d.%f* (e.g. '20070104.5'). Xarray cannot parse this dataformat. If that is the case, `'cmip5'` can be passed and the dates will be correctly interpreted.
 * __`use_PDFs`__: Boolean. Toggle option whether to use the characteristic probability density functions or not.
-* __`rad_factor`__: Factor by which the radiation of the input file is multiplied with. The GSEE requires **kW** and as almost all data for irradiance is given in **W**, the default factor is *1/1000*.
 * __`num_cores`__: By default all CPU-cores are used. However this can be limited here. If `1` is passed, then no parallelization will be used.
 * __``pdfs_file_path``__: Path to the file in which the PDFs are stored.
 
@@ -50,7 +49,7 @@ Instead of letting the script read and prepare the data, a xarray dataset can al
 def run_interface_from_dataset(ds, params, use_pdfs=True, pdfs_file_path='',
                               num_cores=multiprocessing.cpu_count()):
 ```
-* __`ds`__: xarray dataset containing at lest one variable 'global_horizontal' with mean global horizontal irradiance in kW/m2. Optional variables: 'diffuse_fraction', 'temperature' in °C.
+* __`ds`__: xarray dataset containing at lest one variable 'global_horizontal' with mean global horizontal irradiance in W/m2. Optional variables: 'diffuse_fraction', 'temperature' in °C.
 
 #### Pre-Processing the climate data for the gsee
 Depending on the temporal resolution of the input data and chosen options, the interface applies different methods to ready the data for the GSEE.
@@ -70,7 +69,7 @@ In this case the mean value given by the data is regarded as one representative 
 The diffuse fraction is calculated using the BRL-model (Ridley, 2010) with the use of the atmospheric clearness index (k<sub>t</sub>). The clearness index is extimated using the method from Elminir (2007).
 
 #### Output
-The climatdata-interface outputs the data in the same resolution as the input data was in. The unit of the output data is **kWh/day**. Except for hourly values it is **kW/hour**.
+The climatdata-interface outputs the data in the same resolution as the input data was in. The unit of the output data is **Wh/day**. Except for hourly values it is **W/hour**.
 
 #### Example:
 
@@ -97,13 +96,11 @@ def tilt_function(lat):
 
 params = {'tilt': tilt_function, 'azimuth': 180, 'tracking': 0, 'capacity': 1, 'data_freq': 'detect'}
 use_pdfs = True
-th_factor = 1/1000 # GSEE requires kW
 pdfs_file_path='/home/username/PDFs/MERRA2_rad3x3_2011-2015-PDFs_land_prox.nc4'
 
 inter.run_interface(ghi_tuple=(th_file, var_names[0]), diffuse_tuple=(df_file, var_names[1]),
                     temp_tuple=(at_file, var_names[2]), outfile=outfile, params=params,
-                    timeformat=timeformat, use_pdfs=use_pdfs, rad_factor=th_factor,
-                    pdfs_file_path=pdfs_file_path)
+                    timeformat=timeformat, use_pdfs=use_pdfs, pdfs_file_path=pdfs_file_path)
 ```
 
 #### Optaining monthly probability density functions (PDFs)
