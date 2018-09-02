@@ -38,7 +38,7 @@ A plant simulation model implements a model class (e.g. ``PVPlant``) with the re
 
 ### Power output from a PV system with fixed panels
 
-In this example, ``data`` must be a pandas.DataFrame with columns ``global_horizontal`` (in kW/m2), ``diffuse_fraction``, and optionally a ``temperature`` column for ambient air temperature (in degrees Celsius).
+In this example, ``data`` must be a pandas.DataFrame with columns ``global_horizontal`` (in W/m2), ``diffuse_fraction``, and optionally a ``temperature`` column for ambient air temperature (in degrees Celsius).
 
 ```python
 result = gsee.pv.run_model(
@@ -64,7 +64,7 @@ plane_irradiance = gsee.trigon.aperture_irradiance(
 ### Climate data Interface
 
 ```python
-def run_interface(ghi_tuple: tuple, outfile: str, params, diffuse_tuple=('', ''),
+def run_interface(ghi_tuple: tuple, outfile: str, params: dict, diffuse_tuple=('', ''),
                   temp_tuple=('', ''), timeformat='other', use_pdfs=True,
                   pdfs_file_path='', num_cores=multiprocessing.cpu_count()):
 ```
@@ -72,8 +72,9 @@ def run_interface(ghi_tuple: tuple, outfile: str, params, diffuse_tuple=('', '')
 Instead of letting the script read and prepare the data, a xarray dataset can also be passed directly to the following function (e.g. when using the module in combination with a larger application):
 
 ```python
-def run_interface_from_dataset(ds, params, use_pdfs=True, pdfs_file_path='',
-                              num_cores=multiprocessing.cpu_count()):
+def run_interface_from_dataset(ds_in: xr.Dataset, params: dict, use_pdfs=True,
+                                pdfs_file_path='', num_cores=multiprocessing.cpu_count())
+                                 -> xr.Dataset:
 ```
 
 For more information, see the [climate data interface documentation](docs/climatedata-interface.md).

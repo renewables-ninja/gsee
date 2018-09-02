@@ -22,10 +22,9 @@ The provided data files must be in the the ```netCDF``` format and contain at le
 The main function has the following parameters: (imported with ```import gsee.climdata_interface.interface```)
 
 ```python
-def run_interface(ghi_tuple: tuple, outfile: str, params, diffuse_tuple=('', ''),       
+def run_interface(ghi_tuple: tuple, outfile: str, params: dict, diffuse_tuple=('', ''),       
                   temp_tuple=('', ''), timeformat='other', use_pdfs=True,
-                  rad_factor=(1 / 1000), pdfs_file_path='',
-                  num_cores=multiprocessing.cpu_count()):
+                  pdfs_file_path='', num_cores=multiprocessing.cpu_count()):
 ```
 
 **Required Parameters:**
@@ -46,8 +45,9 @@ def run_interface(ghi_tuple: tuple, outfile: str, params, diffuse_tuple=('', '')
 #### Passing a dataset directly
 Instead of letting the script read and prepare the data, a xarray dataset can also be passed directly to the following function (e.g. when using the module in combination with a larger application):
 ```python
-def run_interface_from_dataset(ds, params, use_pdfs=True, pdfs_file_path='',
-                              num_cores=multiprocessing.cpu_count()):
+def run_interface_from_dataset(ds_in: xr.Dataset, params: dict, use_pdfs=True,
+                                pdfs_file_path='', num_cores=multiprocessing.cpu_count())
+                                 -> xr.Dataset:
 ```
 * __`ds`__: xarray dataset containing at lest one variable 'global_horizontal' with mean global horizontal irradiance in W/m2. Optional variables: 'diffuse_fraction', 'temperature' in °C.
 
@@ -92,7 +92,7 @@ timeformat = 'other'
 
 # A function of tilt depending on lat can be provided, or simply a fixed value returned:
 def tilt_function(lat):
-    return 0.353959636801573 * lat + 16.8477501393928
+    return 0.35396 * lat + 16.84775
 
 params = {'tilt': tilt_function, 'azimuth': 180, 'tracking': 0, 'capacity': 1, 'data_freq': 'detect'}
 use_pdfs = True
@@ -117,9 +117,11 @@ Parameters
 ds: xarray dataset
     with 'time', 'lat', 'lon' dimensions and data-variable 'SWGDN'
 outfile: string
-    path and filename where the resulting file should be stored. Must end with .nc4
+    path and filename where the resulting file should be stored.
+    Must end with .nc4
 only_land: bool
-    If true: only gridcells whose center is on land will be computed. False: all cells are computed
+    If true: only gridcells whose center is on land will be computed.
+    False: all cells are computed
 proximity: bool
     If true: A cell is also computed if one of the surrounding cells is land. This makes shure that all coastal
     regions are included, as sometimes the middle of a gridcell can be on the ocean, but still a great part is

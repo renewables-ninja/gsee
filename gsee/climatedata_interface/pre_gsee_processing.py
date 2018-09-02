@@ -2,7 +2,7 @@ import math as m
 import pandas as pd
 import warnings
 import numpy as np
-import sys
+import xarray as xr
 import scipy.stats as st
 from calendar import monthrange
 from gsee.climatedata_interface import kt_h_sinusfunc as cyth
@@ -11,7 +11,7 @@ from gsee import trigon, brl_model
 from gsee import pv as pv_model
 
 
-def add_kd_run_gsee(df, station):
+def add_kd_run_gsee(df: pd.DataFrame, station) -> pd.Series:
     """
     Calculates diffuse fraction with extraterrestrial radiation and Erb's model and creates
     sinusoidal durinal cycle to create an average day for each month
@@ -73,7 +73,7 @@ def add_kd_run_gsee(df, station):
     return pv
 
 
-def resample_for_gsee(ds, params, i, coords, shr_mem, prog_mem):
+def resample_for_gsee(ds: xr.Dataset, params: dict, i: int, coords: tuple, shr_mem: list, prog_mem: list):
     """
     Converts the incoming dataset to dataframe and prepares if for GSEE it depending on the temporal resolution.
 
@@ -126,7 +126,8 @@ def resample_for_gsee(ds, params, i, coords, shr_mem, prog_mem):
     return_pv(pv, shr_mem, prog_mem, coords, i)
 
 
-def resample_for_gsee_with_pdfs(ds, params, i, coords, shr_mem, prog_mem, ds_pdfs):
+def resample_for_gsee_with_pdfs(ds: xr.Dataset , params: dict, i: int, coords: tuple,
+                                shr_mem: list, prog_mem: list, ds_pdfs: xr.Dataset):
     """
     Converts the incoming dataset to dataframe and prepares if for GSEE it depending on the temporal resolution,
     making use of the provide probability denstiy function.
@@ -214,7 +215,7 @@ def resample_for_gsee_with_pdfs(ds, params, i, coords, shr_mem, prog_mem, ds_pdf
 
 
 class PVstation:
-    def __init__(self,tilt, azim, tracking, capacity, data_freq):
+    def __init__(self, tilt, azim, tracking, capacity, data_freq):
         self.azim = azim
         self.tilt = tilt
         self.tracking = tracking
@@ -223,7 +224,7 @@ class PVstation:
         self.data_freq = data_freq
 
 
-def create_rand_month(xk, pk, n):
+def create_rand_month(xk: np.ndarray, pk: np.ndarray, n: int) -> np.ndarray:
         """
 
         Parameters
@@ -257,7 +258,7 @@ def create_rand_month(xk, pk, n):
             return np.full(n, 0)
 
 
-def clearness_index_hourly(df, coords):
+def clearness_index_hourly(df: pd.DataFrame, coords: tuple) -> pd.DataFrame:
     """
     Calculates hourly clearness index and also adds sunrise and sunset to the dataframe
     as separate columns if not yet present. Following Equations from Elminir2007 (Prediction of hourly and daily
@@ -284,7 +285,7 @@ def clearness_index_hourly(df, coords):
     return df
 
 
-def convert_to_durinal(data, coords, factor=1):
+def convert_to_durinal(data: pd.DataFrame, coords: tuple, factor=1) -> pd.DataFrame:
     """
 
     Parameters
@@ -335,7 +336,7 @@ def convert_to_durinal(data, coords, factor=1):
     return daily
 
 
-def ecc_corr(n):
+def ecc_corr(n: int) -> float:
     """
     Parameters
     ----------
@@ -356,7 +357,7 @@ def ecc_corr(n):
     return Eo
 
 
-def decimal_hours(timeobject, rise_or_set):
+def decimal_hours(timeobject, rise_or_set: str) -> float:
     """
     Parameters
     ----------
@@ -384,7 +385,7 @@ def decimal_hours(timeobject, rise_or_set):
         return 23.999
 
 
-def return_pv(pv, shr_mem, prog_mem, coords, i):
+def return_pv(pv: pd.Series, shr_mem: list, prog_mem: list, coords: tuple, i: int):
     """
     Does necessary stuff to pv to convert it back to xarray (adds lat, lon) and saves it to shr_mem
     also updates and draws progress bar

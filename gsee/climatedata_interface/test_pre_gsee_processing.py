@@ -124,3 +124,24 @@ def test_decimal_hours():
     assert (result >= 0) and (result <= 24)
     assert timeobject.hour == int(result)
 
+
+def test_return_pv():
+    coords = (45, 8.5)
+    i = np.random.randint(0, 48)
+    pv = pd.Series(data=np.random.rand(48) / 2, index=pd.date_range(start='2000-01-01', periods=48, freq='D'))
+    pv.index.name = 'time'
+    manager = multiprocessing.Manager()
+    shr_mem = manager.list([None] * 48)
+    prog_mem = manager.list()
+    prog_mem.append(48)
+
+    pre.return_pv(pv=pv, shr_mem=shr_mem, prog_mem=prog_mem, coords=coords, i=i)
+
+    shr_obj = shr_mem[i].resample(time='D').pad()
+    assert isinstance(shr_obj, xr.Dataset)
+    assert len(shr_obj.data_vars) == 1
+    assert 'pv' in shr_obj.data_vars
+    assert shr_obj.sizes['time'] == len(pv)
+    assert shr_obj.sizes['lat'] == 1
+    assert shr_obj.sizes['lon'] == 1
+    assert np.array_equal(pv.index.values, shr_obj['time'].values)

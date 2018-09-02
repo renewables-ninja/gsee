@@ -25,6 +25,7 @@ def test_run_interface_from_dataset():
         assert 'pv' in result.variables
 
 
+@pytest.mark.skip
 def test_mod_time_dim():
     timeseries = pd.date_range('2000-05-18', periods=20, freq='A')
     result = interface.mod_time_dim(timeseries, 'A')
@@ -48,7 +49,21 @@ def test_mod_time_dim():
     for date in result:
         assert date in compare
 
+    timeseries = pd.date_range('2000-05-18', periods=20, freq='M')
+    result = interface.mod_time_dim(timeseries, 'M')
+    days = np.unique(result.map(lambda x: x.day))
+    assert len(days) >= 2
+    for day in days:
+        assert day in [14, 15]
+    hours = np.unique(result.map(lambda x: x.hour))
+    assert len(hours) == 1
+    assert hours[0] == 0
+    minutes = np.unique(result.map(lambda x: x.minute))
+    assert len(minutes) == 1
+    assert minutes[0] == 0
 
+
+@pytest.mark.skip
 def test_detect_frequency():
     for freq in ['A', 'M', 'D', 'H']:
         in_freq = 'detect'
@@ -65,4 +80,19 @@ def test_detect_frequency():
     ds = da.to_dataset(name='random')
     out_freq = interface.detect_frequency(ds, in_freq)
     assert out_freq == 'S'
+
+
+@pytest.mark.skip
+def test_parse_cmip_time_data():
+    for tupl in [(1, 'D', 28), (100, 'MS', 12), (10000, 'AS', 12)]:
+        arr_time = [20070101 + tupl[0] * x for x in range(0, tupl[2])]
+        ds = xr.Dataset(data_vars={'global_horizontal': (('time'), np.random.rand(tupl[2]) / 2)},
+                        coords={'time': arr_time, 'lat': [50], 'lon': [8.5]})
+        result_day = interface.parse_cmip_time_data(ds)
+        result_target = pd.date_range(start='20070101', periods=len(arr_time), freq=tupl[1])
+        assert np.array_equal(result_day, result_target.values)
+
+
+
+
 

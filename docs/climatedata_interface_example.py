@@ -16,7 +16,7 @@ timeformat = 'other'
 
 # A function of tilt depending on lat can be provided, or simply a fixed value returned:
 def tilt_function(lat):
-    return 0.353959636801573 * lat + 16.8477501393928
+    return 0.35396 * lat + 16.84775
 
 params = {'tilt': tilt_function, 'azimuth': 180, 'tracking': 0, 'capacity': 1000, 'data_freq': 'detect'}
 use_pdfs = True

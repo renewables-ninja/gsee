@@ -7,16 +7,16 @@ import os
 import time
 from scipy import spatial
 from itertools import product
-from gsee.climatedata_interface.pre_gsee_processing import resample_for_gsee, resample_for_gsee_with_pdfs, PVstation
+from gsee.climatedata_interface.pre_gsee_processing import resample_for_gsee, resample_for_gsee_with_pdfs
 
 
-def run_interface_from_dataset(ds_in, params, use_pdfs=True, pdfs_file_path='',
-                               num_cores=multiprocessing.cpu_count()):
+def run_interface_from_dataset(ds_in: xr.Dataset, params: dict, use_pdfs=True, pdfs_file_path='',
+                               num_cores=multiprocessing.cpu_count()) -> xr.Dataset:
     """
 
     Parameters
     ----------
-    ds: xarray dataset
+    ds_in: xarray dataset
         containing at lest one variable 'global_horizontal' with mean global horizontal irradiance in W/m2.
         Optional variables: 'diffuse_fraction', 'temperature' in °C
     params: dict
@@ -68,7 +68,7 @@ def run_interface_from_dataset(ds_in, params, use_pdfs=True, pdfs_file_path='',
             print('Single core mode')
             for i, coords in enumerate(coord_list):
                 resample_for_gsee(ds.sel(lat=coords[0], lon=coords[1]), params, i, coords, shr_mem, prog_mem)
-    elif use_pdfs and params['data_freq'] in ['A', 'S', 'M']:
+    elif use_pdfs and params['data_freq'] in ['A', 'S', 'M'] and pdfs_file_path:
         pdfs = xr.open_dataset(pdfs_file_path, autoclose=True)
         pdf_coords = list(product(pdfs['lat'].values, pdfs['lon'].values))
         tree = spatial.KDTree(pdf_coords)
@@ -87,7 +87,7 @@ def run_interface_from_dataset(ds_in, params, use_pdfs=True, pdfs_file_path='',
                 resample_for_gsee_with_pdfs(ds.sel(lat=coords[0], lon=coords[1]), params, i, coords, shr_mem,
                                             prog_mem, pdfs.sel(lat=coord_list_nn[i][0], lon=coord_list_nn[i][1]))
     else:
-        raise ValueError('If use_PDFs is selected, use one of the following frequencies ["A", "S", "M"]')
+        raise ValueError('PDFs file path not given, or frequency is not "A", "M", "D"')
     end = time.time()
     print('\nComputation part took: {} seconds'.format(str(round(end - start, 2))))
 
@@ -106,7 +106,7 @@ def run_interface_from_dataset(ds_in, params, use_pdfs=True, pdfs_file_path='',
     return ds_pv
 
 
-def run_interface(ghi_tuple: tuple, outfile: str, params, diffuse_tuple=('', ''), temp_tuple=('', ''),
+def run_interface(ghi_tuple: tuple, outfile: str, params: dict, diffuse_tuple=('', ''), temp_tuple=('', ''),
                   timeformat='other', use_pdfs=True,
                   pdfs_file_path='', num_cores=multiprocessing.cpu_count()):
     """
@@ -175,7 +175,7 @@ def run_interface(ghi_tuple: tuple, outfile: str, params, diffuse_tuple=('', '')
 # Support functions for run_interface_from_dataset:
 # ----------------------------------------------------------------------------------------------------------------------
 
-def mod_time_dim(time_dim, freq: str):
+def mod_time_dim(time_dim: pd.DatetimeIndex, freq: str):
     """
     Modify Time dimension so it fits the requirements of the "resample_for_gsee" function
     Parameters
@@ -210,63 +210,63 @@ def mod_time_dim(time_dim, freq: str):
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-def detect_frequency(ds, in_freq):
-        """
-        Tries to detect the frequency of the given dataset. Raises error if detected freqency and does not match
-        the given in in_freq
-        Parameters
-        ----------
-        ds: xarray Dataset
-            with a 'time' dimension
-        in_freq: string
-            Frequency given by user. One of ['A', 'S', 'M', 'D', 'H'] for annual, seasonal, monthly, daily, hourly.
-            Can also be 'detect' in that case the frequency is guessed, works mostly except for seasonal data
+def detect_frequency(ds: xr.Dataset, in_freq: str):
+    """
+    Tries to detect the frequency of the given dataset. Raises error if detected freqency and does not match
+    the given in in_freq
+    Parameters
+    ----------
+    ds: xarray Dataset
+        with a 'time' dimension
+    in_freq: string
+        Frequency given by user. One of ['A', 'S', 'M', 'D', 'H'] for annual, seasonal, monthly, daily, hourly.
+        Can also be 'detect' in that case the frequency is guessed, works mostly except for seasonal data
 
-        Returns
-        -------
-        string
-            Detected or validated frequency
+    Returns
+    -------
+    string
+        Detected or validated frequency
 
-        """
-        # Tries to detect frequency, otherwise falls back to manual entry, also compares if the two match:
-        nc_freq = None
+    """
+    # Tries to detect frequency, otherwise falls back to manual entry, also compares if the two match:
+    nc_freq = None
+    try:
+        nc_freq = ds.attrs['frequency']
+    except KeyError:
         try:
-            nc_freq = ds.attrs['frequency']
-        except KeyError:
-            try:
-                nc_freq = pd.DatetimeIndex(data=ds['time'].values).inferred_freq[0]
-            except:
-                pass
-        if not nc_freq:
-            print('> No frequency detected --> checking manual entry', end='')
-            if in_freq in ['A', 'S', 'M', 'D', 'H']:
-                print('...Manual entry is valid')
-                data_freq = in_freq
-            else:
-                raise ValueError('detect failed or manual entry is invalid input check settings')
+            nc_freq = pd.DatetimeIndex(data=ds['time'].values).inferred_freq[0]
+        except:
+            pass
+    if not nc_freq:
+        print('> No frequency detected --> checking manual entry', end='')
+        if in_freq in ['A', 'S', 'M', 'D', 'H']:
+            print('...Manual entry is valid')
+            data_freq = in_freq
         else:
-            if nc_freq == 'year':
-                data_freq = 'A'
-            elif nc_freq == 'mon':
-                data_freq = 'M'
-            elif nc_freq == 'day':
-                data_freq = 'D'
-            else:
-                data_freq = nc_freq
-            print('> Detected frequency: {}'.format(data_freq))
+            raise ValueError('detect failed or manual entry is invalid input check settings')
+    else:
+        if nc_freq == 'year':
+            data_freq = 'A'
+        elif nc_freq == 'mon':
+            data_freq = 'M'
+        elif nc_freq == 'day':
+            data_freq = 'D'
+        else:
+            data_freq = nc_freq
+        print('> Detected frequency: {}'.format(data_freq))
 
-        if in_freq == 'S' and not data_freq in ['A', 'M', 'D', 'H']:
-            print('> Frequency is detected, but is not "A", "M", "D", or "H" thus assumed some kind of seasonal')
-            return in_freq
-        if data_freq in ['A', 'S', 'M', 'D', 'H'] and in_freq != data_freq and in_freq != 'detect':
-            raise Warning(
-                '\tManual given frequency is valid, however it does not match detected frequency. Check settings!')
-        if data_freq not in ['A', 'S', 'M', 'D', 'H']:
-            raise ValueError('> Time frequency invalid, use one from ["A", "S", "M", "D", "H"]')
-        return data_freq
+    if in_freq == 'S' and not data_freq in ['A', 'M', 'D', 'H']:
+        print('> Frequency is detected, but is not "A", "M", "D", or "H" thus assumed some kind of seasonal')
+        return in_freq
+    if data_freq in ['A', 'S', 'M', 'D', 'H'] and in_freq != data_freq and in_freq != 'detect':
+        raise Warning(
+            '\tManual given frequency is valid, however it does not match detected frequency. Check settings!')
+    if data_freq not in ['A', 'S', 'M', 'D', 'H']:
+        raise ValueError('> Time frequency invalid, use one from ["A", "S", "M", "D", "H"]')
+    return data_freq
 
 
-def parse_cmip_time_data(ds):
+def parse_cmip_time_data(ds: xr.Dataset):
     """
     Converts time data saved as number with format "day as %Y%m%d.%f" to datetime64 format
     Parameters
@@ -289,7 +289,7 @@ def parse_cmip_time_data(ds):
         raise RuntimeError('Parsing of "cmip5" time-dimension failed. Take "other" as timeformat or check data.')
 
 
-def open_files(ghi_tuple, diffuse_tuple, temp_tuple):
+def open_files(ghi_tuple: tuple, diffuse_tuple: tuple, temp_tuple: tuple):
     """
     Opens the given files for GHI, diffuse Fraction and temperature, extracts the corresponding variables
     and merges all three together to one dataset.
