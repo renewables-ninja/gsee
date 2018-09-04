@@ -5,7 +5,6 @@ import pandas as pd
 import pytest
 
 
-@pytest.mark.skip
 def test_run_interface_from_dataset():
     for freq in ['A', 'S', 'M', 'D', 'H']:
         if freq in ['A', 'M', 'D', 'H']:
@@ -16,7 +15,6 @@ def test_run_interface_from_dataset():
             ds = xr.Dataset(data_vars={'global_horizontal': (('time', 'lat', 'lon'), 1000 * np.random.rand(48, 2, 2)/2)},
                         coords={'time': pd.date_range(start='2000-01-01', periods=48, freq='QS-DEC'),
                                 'lat': [40, 50], 'lon': [8.5, 9.5]})
-        #TODO add functionality that if length of hourly data is not dividibile by 24 the brl model still works
         params = {'tilt': 35, 'azimuth': 180, 'tracking': 0, 'capacity': 1, 'data_freq': freq}
         result = interface.run_interface_from_dataset(ds, params, use_pdfs=False)
         assert type(result) == xr.Dataset
@@ -25,7 +23,6 @@ def test_run_interface_from_dataset():
         assert 'pv' in result.variables
 
 
-@pytest.mark.skip
 def test_mod_time_dim():
     timeseries = pd.date_range('2000-05-18', periods=20, freq='A')
     result = interface.mod_time_dim(timeseries, 'A')
@@ -63,7 +60,6 @@ def test_mod_time_dim():
     assert minutes[0] == 0
 
 
-@pytest.mark.skip
 def test_detect_frequency():
     for freq in ['A', 'M', 'D', 'H']:
         in_freq = 'detect'
@@ -82,7 +78,6 @@ def test_detect_frequency():
     assert out_freq == 'S'
 
 
-@pytest.mark.skip
 def test_parse_cmip_time_data():
     for tupl in [(1, 'D', 28), (100, 'MS', 12), (10000, 'AS', 12)]:
         arr_time = [20070101 + tupl[0] * x for x in range(0, tupl[2])]

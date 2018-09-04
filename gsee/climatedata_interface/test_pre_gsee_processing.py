@@ -10,7 +10,6 @@ import multiprocessing
 import pytest
 
 
-@pytest.mark.skip
 def test_add_kd_run_gsee():
     df = pd.DataFrame(data={'global_horizontal': 1000 * np.random.rand(25) / 2,
                             'temperature': np.random.randint(0, 25, 25)},
@@ -24,7 +23,6 @@ def test_add_kd_run_gsee():
     assert 'pv' in result.columns
 
 
-@pytest.mark.skip
 def test_resample_for_gsee():
     for freq in ['AS', 'D', 'H']:
         coords = (45, 8.5)
@@ -51,7 +49,6 @@ def test_resample_for_gsee():
         assert np.array_equal(ds['time'].values, shr_obj['time'].values)
 
 
-@pytest.mark.skip
 def test_resample_for_gsee_with_pdfs():
     for freq in ['AS', 'MS']:
         coords = (45, 8.5)
@@ -83,7 +80,6 @@ def test_resample_for_gsee_with_pdfs():
         assert np.array_equal(ds['time'].values, shr_obj['time'].values)
 
 
-@pytest.mark.skip
 def test_kt_h():
     gsc = 1367
     lat = 50
@@ -100,7 +96,20 @@ def test_kt_h():
     assert round(kt_h, 4) == 0.3105
 
 
-@pytest.mark.skip
+def test_clearness_index_hourly():
+    coords = (45, 9)
+    df = pd.DataFrame(data={'global_horizontal': [100, 300, 500, 700, 900],
+                            'sunrise_h': [5.3, 7.4, 6.35, 5.88, 7.467],
+                            'Eo': [1.006446, 1.12318, 1.148916, 1.00891, 1.098145],
+                            'n': [44, 55, 88, 198, 200],
+                            'hour': [12, 16, 9, 14, 12]})
+    result = pre.clearness_index_hourly(df, coords)
+    check = [0.17764986, 0.76200541, 0.60162922, 0.5717562, 0.7684602]
+
+    assert np.array_equal(np.round(result['kt_h'].values, 8),
+                          np.array([0.17764986, 0.76200541, 0.60162922, 0.5717562, 0.7684602]))
+
+
 def test_convert_to_diurnal():
     df = pd.DataFrame(data={'global_horizontal': 1000 * np.random.rand(25) / 2},
                       index=pd.DatetimeIndex(start='2000-05-18', periods=25, freq='D'))
@@ -115,14 +124,29 @@ def test_convert_to_diurnal():
                           result.resample(rule='D').mean()['global_horizontal'].round(10))
 
 
-@pytest.mark.skip
 def test_decimal_hours():
-    timeobject = dt.datetime(year=2011, month=random.randint(1, 12), day=random.randint(1, 28),
-                             hour=random.randint(0, 23), minute=random.randint(0, 59))
-    result = pre.decimal_hours(timeobject, 'sunrise')
-    assert isinstance(result, (int, float, complex))
-    assert (result >= 0) and (result <= 24)
-    assert timeobject.hour == int(result)
+    for rise_set in ['sunrise', 'sunset']:
+        timeobject = dt.datetime(year=2011, month=random.randint(1, 12), day=random.randint(1, 28),
+                                 hour=random.randint(0, 23), minute=random.randint(0, 59))
+        result = pre.decimal_hours(timeobject, rise_set)
+        assert isinstance(result, (int, float, complex))
+        assert (result >= 0) and (result <= 24)
+        assert timeobject.hour == int(result)
+
+        minutes = [12, 15, 30, 48]
+        results = [4.2, 6.25, 15.5, 20.8]
+        for i, hour in enumerate([4, 6, 15, 20]):
+            minute = minutes[i]
+            timeobject = dt.datetime(year=2011, month=random.randint(1, 12), day=random.randint(1, 28),
+                                     hour=hour, minute=minute)
+            result = pre.decimal_hours(timeobject, rise_set)
+            assert result == results[i]
+
+        result = pre.decimal_hours(None, rise_set)
+        if rise_set == 'sunrise':
+            assert result == 0.0
+        elif rise_set == 'sunset':
+            assert result == 23.999
 
 
 def test_return_pv():
