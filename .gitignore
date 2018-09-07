@@ -4,8 +4,6 @@
 build/
 dist/
 *.html
-.idea/*
-*.so
 *.cache/
-*.pkl
-*_local.py
+*.so
+*.c
