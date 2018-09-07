@@ -228,7 +228,7 @@ def run_model(
     # specific panel types
     panel_class = _PANEL_TYPES[technology]
     panel_efficiency = 0.1
-    area_per_capacity = 1 / panel_efficiency
+    area_per_capacity = 0.001 / panel_efficiency
 
     # TODO allow panel_aperture to change through day as shading takes place
     panel = panel_class(panel_aperture=capacity * area_per_capacity,
