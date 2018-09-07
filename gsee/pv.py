@@ -240,7 +240,7 @@ def run_model(
     output = panel.panel_power(irrad.direct,
                                irrad.diffuse,
                                tamb)
-    sim = pd.Series(output, index=datetimes) * (1 - system_loss)
+    sim = pd.Series(output, index=datetimes).clip_upper(capacity) * (1 - system_loss)
     if include_raw_data:
         items = [
             ('output', sim),
