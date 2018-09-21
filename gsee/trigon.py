@@ -44,9 +44,8 @@ def _sun_rise_set(datetime_index, obs):
 
 def sun_rise_set_times(datetime_index, coords):
     """
-    Return sunrise and set times for the given datetime_index and coords.
-
-    The datetime_index will be resampled to daily frequency.
+    Return sunrise and set times for the given datetime_index and coords,
+    as a Series indexed by date (days, resampled from the datetime_index).
 
     """
     obs = ephem.Observer()
@@ -54,7 +53,10 @@ def sun_rise_set_times(datetime_index, coords):
     obs.lon = str(coords[1])
     # Ensure datetime_index is daily
     dtindex = pd.DatetimeIndex(datetime_index.to_series().map(pd.Timestamp.date).unique())
-    return _sun_rise_set(dtindex, obs)
+    return pd.Series(
+        _sun_rise_set(dtindex, obs),
+        index=dtindex
+    )
 
 
 def sun_angles(datetime_index, coords, rise_set_times=None):
@@ -85,8 +87,8 @@ def sun_angles(datetime_index, coords, rise_set_times=None):
     sun = ephem.Sun()
 
     # Calculate daily sunrise/sunset times
-    if not rise_set_times:
-        rise_set_times = _sun_rise_set(datetime_index, obs)
+    if rise_set_times is None:
+        rise_set_times = sun_rise_set_times(datetime_index, coords)
 
     # Calculate hourly altitute, azimuth, and sunshine
     alts = []
@@ -95,8 +97,8 @@ def sun_angles(datetime_index, coords, rise_set_times=None):
 
     for index, item in enumerate(datetime_index):
         obs.date = item
-        # rise/set times are indexed by day, so need to scale the index
-        rise_time, set_time = rise_set_times[int(index / 24)]
+        # rise/set times are indexed by day, so need to adjust lookup
+        rise_time, set_time = rise_set_times.loc[item.date()]
 
         # Set angles, sun altitude and duration based on hour of day:
         if rise_time is not None and item.hour == rise_time.hour:

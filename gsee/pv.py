@@ -197,7 +197,7 @@ def run_model(
     Returns
     -------
     result : pandas Series
-        Electric output from PV system in W per hour.
+        Electric output from PV system in each hour (W).
 
     """
     if (system_loss < 0) or (system_loss > 1):
