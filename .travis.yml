@@ -3,10 +3,14 @@
 language: python
 sudo: false  # Use container-based infrastructure
 
-python:
-  - "3.5"
-  - "3.6"
-  - "3.7"
+matrix:
+  include:
+  - name: "Python 3.5"
+    env: PY_VERSION="3.5"
+  - name: "Python 3.6"
+    env: PY_VERSION="3.6"
+  - name: "Python 3.7"
+    env: PY_VERSION="3.7"
 
 before_install:
   - "wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;"
@@ -18,9 +22,10 @@ before_install:
   - conda info -a
 
 install:
-  - conda env create -n gsee --file requirements.yml --file requirements_test.yml python=$TRAVIS_PYTHON_VERSION
+  - conda env create -n gsee --file requirements.yml python=$PY_VERSION
   - source activate gsee
-  - pip install --no-cache-dir .
+  - conda env update --file requirements_test.yml
+  - pip install --no-cache-dir --verbose .
 
 script:
   - py.test --cov gsee --cov-report term-missing
