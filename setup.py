@@ -58,6 +58,7 @@ setup(
     ],
     extras_require={
         'multicore': ["joblib >= 0.12"],
+        'monthly_pdfs': ["basemap >= 1.1.0", "seaborn"],
     },
     classifiers=[
         'Development Status :: 4 - Beta',

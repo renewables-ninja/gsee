@@ -4,6 +4,7 @@ channels:
     - conda-forge
 
 dependencies:
+    - Cython >= 0.27.3
     - twine
     - setuptools
     - wheel

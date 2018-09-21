@@ -25,7 +25,7 @@ install:
   - conda env create -n gsee --file requirements.yml python=$PY_VERSION
   - source activate gsee
   - conda env update --file requirements_test.yml
-  - pip install --no-cache-dir --verbose .
+  - pip install --no-cache-dir --verbose -e .
 
 script:
   - py.test --cov gsee --cov-report term-missing
