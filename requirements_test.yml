@@ -4,6 +4,4 @@ channels:
     - conda-forge
 
 dependencies:
-    - twine
-    - setuptools
-    - wheel
+    - python-coveralls

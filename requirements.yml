@@ -2,7 +2,6 @@ name: gsee
 
 channels:
     - conda-forge
-    - anaconda
 
 dependencies:
     - pyephem >= 3.7.6.0
