@@ -2,7 +2,7 @@ import math as m
 import pandas as pd
 import warnings
 import numpy as np
-import sys
+import xarray as xr
 import scipy.stats as st
 from calendar import monthrange
 from gsee.climatedata_interface import kt_h_sinusfunc as cyth
@@ -11,35 +11,7 @@ from gsee import trigon, brl_model
 from gsee import pv as pv_model
 
 
-def decimal_hours(timeobject, rise_or_set):
-    """
-    Parameters
-    ----------
-    timeobject : datetime object
-        Sunrise or -set time
-    rise_or_set: string
-        'sunrise' or 'sunset' specifiying which of the two timeobject is
-    Returns
-    -------
-    float
-        time of timeobject in decimal hours
-
-    """
-    assert rise_or_set == 'sunrise' or rise_or_set == 'sunset'
-
-    if timeobject:
-        ret =  timeobject.hour + timeobject.minute / 60
-        if ret == 0:
-            return 0.0
-        else:
-            return ret
-    elif rise_or_set == 'sunrise':
-        return 0.0
-    elif rise_or_set == 'sunset':
-        return 23.999
-
-
-def add_kd_run_gsee(df, station):
+def add_kd_run_gsee(df: pd.DataFrame, station) -> pd.Series:
     """
     Calculates diffuse fraction with extraterrestrial radiation and Erb's model and creates
     sinusoidal durinal cycle to create an average day for each month
@@ -57,102 +29,12 @@ def add_kd_run_gsee(df, station):
         containing column 'pv' with simulated PV power output
     """
 
-    def _clearness_index_hourly(df, coords):
-        """
-        Calculates hourly clearness index and also adds sunrise and sunset to the dataframe
-        as separate columns if not yet present. Following Equations from Elminir2007 (Prediction of hourly and daily
-        diffuse fraction using neural network, as compared to linear regression models)
-
-        Parameters
-        ----------
-        df : Pandas Dataframe
-            containing columns: 'n', 'hour', 'Eo', 'sunrise_h', 'global_horizontal'
-        coords : Tuple
-            coordinates of pv station (lat, lon)
-
-        Returns
-        -------
-        Pandas Dataframe:
-            Same as df but with additional column "kt_h" = hourly clearness index
-        """
-        lat = m.radians(coords[0])
-        S = 1.367  # Solar constant in kW/m2
-        df['kt_h'] = cyth.apply_kt_h(S, lat, df['n'].values, df['hour'].values,
-                                     df['Eo'].values, df['sunrise_h'].values,
-                                     df['global_horizontal'].values)
-
-        return df
-
-    def _convert_to_durinal(data, coords, factor=1):
-        """
-
-        Parameters
-        ----------
-        data : Pandas dataframe
-            with datetimeindex and column 'global_horizontal'
-        coords : Tuple
-            coordinates of pv station (lat, lon)
-        factor : int
-            by which the incoming data is multiplied, used to convert W to Wh/day
-        Returns
-        -------
-        Pandas dataframe
-            with hourly values and column 'global horizontal' following a sinusoidal function
-        """
-
-        def _upsample_df_single_day(indf):
-            """Upsamples dataframe to hourly values but only fills the days that were in the original dataframe
-            and drops all other rows
-            """
-            df = indf.copy()
-            # add line at the end so resample treats it like a whole day:
-            df.ix[df.index[-1] + pd.Timedelta('1D')] = np.full(len(df.columns), 0)
-            df = df.resample(rule='1H').pad(limit=23)
-            # removing last line again:
-            df = df.drop(df.index[-1])
-            return df.dropna(how='all')
-
-        # Calculate sunset and sunrise times and write to dataframe:
-        if not 'rise_set' in data:
-            data['rise_set'] = trigon.sun_rise_set_times(data.index, coords)
-            data['sunrise_h'] = data['rise_set'].map(lambda x: decimal_hours(x[0], 'sunrise'))
-            data['sunset_h'] = data['rise_set'].map(lambda x: decimal_hours(x[1], 'sunset'))
-        # Upsample the data to hourly timestamps and calculate the hourly irradiance:
-        data.loc[:, 'global_horizontal_day'] = factor * data['global_horizontal'].copy()
-        daily = _upsample_df_single_day(data)
-        daily['hour'] = daily.index.hour
-        daily['global_horizontal'] = cyth.apply_csinus_func(daily['sunrise_h'].values,
-                                                            daily['sunset_h'].values,
-                                                            daily['hour'].values,
-                                                            daily['global_horizontal_day'].values)
-        return daily
-
-    def _ecc_corr(n):
-        """
-        Parameters
-        ----------
-        n: int
-            day of the year
-
-        Returns
-        -------
-        float
-            Eccentricity coefficient
-        """
-
-        t = (2 * m.pi * (n - 1)) / 365
-        Eo = (1.000110 + 0.034221 * m.cos(t) +
-              0.001280 * m.sin(t) +
-              0.000719 * m.cos(2 * t) +
-              0.00077 * m.sin(2 * t))
-        return Eo
-
     coords = station.coords
 
     tmp_df = df.copy()
     #Add time of day and eccentricity coefficient
     tmp_df['n'] = tmp_df.index.map(lambda x: x.timetuple().tm_yday)
-    tmp_df['Eo'] = tmp_df['n'].map(_ecc_corr)
+    tmp_df['Eo'] = tmp_df['n'].map(ecc_corr)
 
     if station.data_freq == 'H' and 'diffuse_fraction' not in tmp_df.columns:
         # Calculate sunset and sunrise times and write to dataframe:
@@ -167,11 +49,10 @@ def add_kd_run_gsee(df, station):
         tmp_df_du = tmp_df
     else:
         # Generate durinal cycle for each day:
-        tmp_df_du = _convert_to_durinal(tmp_df, coords, factor=24)
+        tmp_df_du = convert_to_durinal(tmp_df, coords, factor=24)
 
     # Determine hourly clearness index:
-    tmp_df_kd = _clearness_index_hourly(tmp_df_du, coords)
-
+    tmp_df_kd = clearness_index_hourly(tmp_df_du, coords)
     # Calculate diffuse fraction:
     tmp_df_kd['diffuse_fraction'] = brl_model.run(tmp_df_kd['kt_h'], coords, tmp_df_kd['rise_set'].tolist())
     # Run PV-model
@@ -182,7 +63,6 @@ def add_kd_run_gsee(df, station):
         warnings.simplefilter('ignore')
         pv_h = pv_model.run_model(data=tmp_df_kd, coords=coords, tilt=station.tilt, azim=station.azim,
                               tracking=station.tracking, capacity=station.capacity)
-
     if station.data_freq != 'H':
         pv = pv_h.resample(rule='1D').sum()
     else:
@@ -193,7 +73,7 @@ def add_kd_run_gsee(df, station):
     return pv
 
 
-def resample_for_gsee(ds, params, i, coords, shr_mem, prog_mem):
+def resample_for_gsee(ds: xr.Dataset, params: dict, i: int, coords: tuple, shr_mem: list, prog_mem: list):
     """
     Converts the incoming dataset to dataframe and prepares if for GSEE it depending on the temporal resolution.
 
@@ -211,7 +91,6 @@ def resample_for_gsee(ds, params, i, coords, shr_mem, prog_mem):
         list indicating the overall progress of the computation, first value ([0]) is the total number
         of coordinate tuples to compute.
     """
-
     df = ds.to_dataframe()
     station = PVstation(params['tilt'], params['azimuth'], params['tracking'], params['capacity'], params['data_freq'])
     if callable(station.tilt):
@@ -219,7 +98,6 @@ def resample_for_gsee(ds, params, i, coords, shr_mem, prog_mem):
     station.coords = coords
     # Store data_freq in station object:
     data_freq = station.data_freq
-
     df = df.drop(['lon', 'lat'], axis=1)
     for col in df.columns:
         if col not in ['global_horizontal', 'diffuse_fraction', 'temperature']:
@@ -228,7 +106,7 @@ def resample_for_gsee(ds, params, i, coords, shr_mem, prog_mem):
 
     if data_freq == 'A':
         # Create 2 days, one in spring and one in autumn, which are then calculated by GSEE
-        df.ix[df.index[-1] + pd.Timedelta('365D')] = np.full(len(df.columns), 0)
+        df.ix[df.index[-1] + pd.DateOffset(years=1)] = np.full(len(df.columns), 0)
         df_yearly12 = df.resample(rule='Q').pad()
         df_yearly12 = df_yearly12[0:-1:2]
         pv = add_kd_run_gsee(df=df_yearly12, station=station)
@@ -248,7 +126,8 @@ def resample_for_gsee(ds, params, i, coords, shr_mem, prog_mem):
     return_pv(pv, shr_mem, prog_mem, coords, i)
 
 
-def resample_for_gsee_with_pdfs(ds, params, i, coords, shr_mem, prog_mem, ds_pdfs):
+def resample_for_gsee_with_pdfs(ds: xr.Dataset , params: dict, i: int, coords: tuple,
+                                shr_mem: list, prog_mem: list, ds_pdfs: xr.Dataset):
     """
     Converts the incoming dataset to dataframe and prepares if for GSEE it depending on the temporal resolution,
     making use of the provide probability denstiy function.
@@ -269,40 +148,6 @@ def resample_for_gsee_with_pdfs(ds, params, i, coords, shr_mem, prog_mem, ds_pdf
     ds_pdfs : xarray dataset
         containing xk, pk values for selected coordinates
     """
-
-    def _create_rand_month(xk, pk, n):
-        """
-
-        Parameters
-        ----------
-        xk : List
-            of bins of possible radiation values
-        pk : List
-            Probabilities for the bins in xk to occur
-        n : int
-            length of the month in days
-
-        Returns
-        -------
-        List
-            of length n with randon values xk following the probabilites given in pk
-
-        """
-
-        multi = 10000  # multiplied as .rvs only gives integer values, but we want a higher resolution
-        xk = xk * multi
-
-        if sum(pk) and sum(pk) > 0:
-            pk = pk / sum(pk)  # normalized so sum(pk)==1
-            try:
-                custm = st.rv_discrete(name='custm', values=(xk, pk))
-            except:
-                raise ValueError('Sum provided pk is not 1')
-            r = custm.rvs(size=n) / multi
-            return r
-        else:
-            return np.full(n, 0)
-
     df = ds.to_dataframe()
     station = PVstation(params['tilt'], params['azimuth'], params['tracking'], params['capacity'], params['data_freq'])
     if callable(station.tilt):
@@ -338,10 +183,10 @@ def resample_for_gsee_with_pdfs(ds, params, i, coords, shr_mem, prog_mem, ds_pdf
         for mon in monthlist[start_month - 1:start_month + n_months - 1]:
             days = monthrange(year, mon)[1]
             ds_pdfs_mon = ds_pdfs.sel(month=mon)
-            rand_days = _create_rand_month(xk=ds_pdfs_mon['xk'].values, pk=ds_pdfs_mon['pk'].values,
+            rand_days = create_rand_month(xk=ds_pdfs_mon['xk'].values, pk=ds_pdfs_mon['pk'].values,
                                           n=monthrange(year, mon)[1])
             rand_days_list.extend(rand_days)
-            if 'temperature in row':
+            if 'temperature' in row:
                 temperatures.extend(np.full(days, row['temperature']))
         if any(rand_days_list):
             rand_days_list = [q * (row['global_horizontal'] / np.mean(rand_days_list)) for q in rand_days_list]
@@ -364,7 +209,183 @@ def resample_for_gsee_with_pdfs(ds, params, i, coords, shr_mem, prog_mem, ds_pdf
     return_pv(pv, shr_mem, prog_mem, coords, i)
 
 
-def return_pv(pv, shr_mem, prog_mem, coords, i):
+# ----------------------------------------------------------------------------------------------------------------------
+# Support functions::
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+class PVstation:
+    def __init__(self, tilt, azim, tracking, capacity, data_freq):
+        self.azim = azim
+        self.tilt = tilt
+        self.tracking = tracking
+        self.capacity = capacity
+        self.coords = (0,0) #Format (lat, lon) as GSEE needs it like this
+        self.data_freq = data_freq
+
+
+def create_rand_month(xk: np.ndarray, pk: np.ndarray, n: int) -> np.ndarray:
+        """
+
+        Parameters
+        ----------
+        xk : List
+            of bins of possible radiation values
+        pk : List
+            Probabilities for the bins in xk to occur
+        n : int
+            length of the month in days
+
+        Returns
+        -------
+        List
+            of length n with randon values xk following the probabilites given in pk
+
+        """
+
+        multi = 10000  # multiplied as .rvs only gives integer values, but we want a higher resolution
+        xk = xk * multi
+
+        if sum(pk) and sum(pk) > 0:
+            pk = pk / sum(pk)  # normalized so sum(pk)==1
+            try:
+                custm = st.rv_discrete(name='custm', values=(xk, pk))
+            except:
+                raise ValueError('Sum provided pk is not 1')
+            r = custm.rvs(size=n) / multi
+            return r
+        else:
+            return np.full(n, 0)
+
+
+def clearness_index_hourly(df: pd.DataFrame, coords: tuple) -> pd.DataFrame:
+    """
+    Calculates hourly clearness index and also adds sunrise and sunset to the dataframe
+    as separate columns if not yet present. Following Equations from Elminir2007 (Prediction of hourly and daily
+    diffuse fraction using neural network, as compared to linear regression models)
+
+    Parameters
+    ----------
+    df : Pandas Dataframe
+        containing columns: 'n', 'hour', 'Eo', 'sunrise_h', 'global_horizontal'
+    coords : Tuple
+        coordinates of pv station (lat, lon)
+
+    Returns
+    -------
+    Pandas Dataframe:
+        Same as df but with additional column "kt_h" = hourly clearness index
+    """
+    lat = m.radians(coords[0])
+    S = 1367  # Solar constant in W/m2
+    df['kt_h'] = cyth.apply_kt_h(S, lat, df['n'].values, df['hour'].values,
+                                 df['Eo'].values, df['sunrise_h'].values,
+                                 df['global_horizontal'].values)
+
+    return df
+
+
+def convert_to_durinal(data: pd.DataFrame, coords: tuple, factor=1) -> pd.DataFrame:
+    """
+
+    Parameters
+    ----------
+    data : Pandas dataframe
+        with datetimeindex and column 'global_horizontal'
+    coords : Tuple
+        coordinates of pv station (lat, lon)
+    factor : int
+        by which the incoming data is multiplied, used to convert W to Wh/day
+    Returns
+    -------
+    Pandas dataframe
+        with hourly values and column 'global horizontal' following a sinusoidal function
+    """
+
+    def _upsample_df_single_day(indf):
+        """Upsamples dataframe to hourly values but only fills the days that were in the original dataframe
+        and drops all other rows
+        """
+        df = indf.copy()
+        # add line at the end so resample treats it like a whole day:
+        df.ix[df.index[-1] + pd.Timedelta('1D')] = np.full(len(df.columns), 0)
+        df = df.resample(rule='1H').pad(limit=23)
+        # removing last line again:
+        df = df.drop(df.index[-1])
+        return df.dropna(how='all')
+
+    # Calculate sunset and sunrise times and write to dataframe:
+    if not 'rise_set' in data:
+        data['rise_set'] = trigon.sun_rise_set_times(data.index, coords)
+        data['sunrise_h'] = data['rise_set'].map(lambda x: decimal_hours(x[0], 'sunrise'))
+        data['sunset_h'] = data['rise_set'].map(lambda x: decimal_hours(x[1], 'sunset'))
+    # Upsample the data to hourly timestamps and calculate the hourly irradiance:
+    data.loc[:, 'global_horizontal_day'] = factor * data['global_horizontal'].copy()
+    daily = _upsample_df_single_day(data)
+    daily['hour'] = daily.index.hour
+    daily['global_horizontal'] = cyth.apply_csinus_func(daily['sunrise_h'].values,
+                                                        daily['sunset_h'].values,
+                                                        daily['hour'].values,
+                                                        daily['global_horizontal_day'].values)
+    mean_daily = daily['global_horizontal'].resample(rule='D').mean()
+    corr_fact = mean_daily / data['global_horizontal']
+    ups_corr_fact = _upsample_df_single_day(corr_fact.to_frame())
+    daily_corr = daily['global_horizontal'] / ups_corr_fact['global_horizontal']
+    daily['global_horizontal'] = daily_corr
+
+    return daily
+
+
+def ecc_corr(n: int) -> float:
+    """
+    Parameters
+    ----------
+    n: int
+        day of the year
+
+    Returns
+    -------
+    float
+        Eccentricity coefficient
+    """
+
+    t = (2 * m.pi * (n - 1)) / 365
+    Eo = (1.000110 + 0.034221 * m.cos(t) +
+          0.001280 * m.sin(t) +
+          0.000719 * m.cos(2 * t) +
+          0.00077 * m.sin(2 * t))
+    return Eo
+
+
+def decimal_hours(timeobject, rise_or_set: str) -> float:
+    """
+    Parameters
+    ----------
+    timeobject : datetime object
+        Sunrise or -set time
+    rise_or_set: string
+        'sunrise' or 'sunset' specifiying which of the two timeobject is
+    Returns
+    -------
+    float
+        time of timeobject in decimal hours
+
+    """
+    assert rise_or_set == 'sunrise' or rise_or_set == 'sunset'
+
+    if timeobject:
+        ret =  timeobject.hour + timeobject.minute / 60
+        if ret == 0:
+            return 0.0
+        else:
+            return ret
+    elif rise_or_set == 'sunrise':
+        return 0.0
+    elif rise_or_set == 'sunset':
+        return 23.999
+
+
+def return_pv(pv: pd.Series, shr_mem: list, prog_mem: list, coords: tuple, i: int):
     """
     Does necessary stuff to pv to convert it back to xarray (adds lat, lon) and saves it to shr_mem
     also updates and draws progress bar
@@ -396,14 +417,7 @@ def return_pv(pv, shr_mem, prog_mem, coords, i):
     progress_bar(len(prog_mem), len_coord_list)
 
 
-class PVstation:
-    def __init__(self,tilt, azim, tracking, capacity, data_freq):
-        self.azim = azim
-        self.tilt = tilt
-        self.tracking = tracking
-        self.capacity = capacity
-        self.coords = (0,0) #Format (lat, lon) as GSEE needs it like this
-        self.data_freq = data_freq
+# ----------------------------------------------------------------------------------------------------------------------
 
 
 
