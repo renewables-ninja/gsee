@@ -47,7 +47,7 @@ setup(
     zip_safe=False,
     install_requires=[
         "numpy >= 1.15.0",
-        "pandas >= 0.24.4",
+        "pandas >= 0.23.4",
         "pyephem >= 3.7.6",
         "scipy >= 1.1.0",
         "xarray >= 0.10.9",
