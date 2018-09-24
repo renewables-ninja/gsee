@@ -46,14 +46,14 @@ setup(
     ext_modules=ext_modules,
     zip_safe=False,
     install_requires=[
-        "numpy >= 1.15",
-        "pandas >= 0.23",
+        "numpy >= 1.15.0",
+        "pandas >= 0.24.4",
         "pyephem >= 3.7.6",
-        "scipy >= 1.1",
-        "xarray >= 0.10.8",
+        "scipy >= 1.1.0",
+        "xarray >= 0.10.9",
     ],
     setup_requires=[
-        'Cython >= 0.27.3',
+        'Cython >= 0.28.5',
         "numpy >= 1.15",
     ],
     extras_require={
