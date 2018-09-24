@@ -65,6 +65,7 @@ def add_kd_run_gsee(df: pd.DataFrame, station) -> pd.Series:
                               tracking=station.tracking, capacity=station.capacity)
     if station.data_freq != 'H':
         pv = pv_h.resample(rule='1D').sum()
+        pv = pv[pv.index.isin(df.index)]
     else:
         pv = pv_h
     pv = pv[np.isfinite(pv)]
@@ -415,10 +416,3 @@ def return_pv(pv: pd.Series, shr_mem: list, prog_mem: list, coords: tuple, i: in
     prog_mem.append(1)
     len_coord_list = prog_mem[0]
     progress_bar(len(prog_mem), len_coord_list)
-
-
-# ----------------------------------------------------------------------------------------------------------------------
-
-
-
-
