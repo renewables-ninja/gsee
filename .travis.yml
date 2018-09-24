@@ -22,9 +22,9 @@ before_install:
   - conda info -a
 
 install:
-  - conda env create -n gsee --file requirements.yml python=$PY_VERSION
+  - conda env create -n gsee --file requirements/base.yml python=$PY_VERSION
   - source activate gsee
-  - conda env update --file requirements_test.yml
+  - conda env update --file requirements/test.yml
   - pip install --no-cache-dir --verbose -e .
 
 script:

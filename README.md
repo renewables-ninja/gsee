@@ -1,3 +1,5 @@
+[![Build Status](https://img.shields.io/travis/com/renewables-ninja/gsee/master.svg?style=flat-square)](https://travis-ci.com/renewables-ninja/gsee) [![Coverage](https://img.shields.io/coveralls/renewables-ninja/gsee.svg?style=flat-square)](https://coveralls.io/r/renewables-ninja/gsee) [![PyPI version](https://img.shields.io/pypi/v/gsee.svg?style=flat-square)](https://pypi.python.org/pypi/gsee)
+
 # GSEE: global solar energy estimator
 
 `GSEE` is a solar energy simulation library designed for speed and ease of use. [Renewables.ninja](https://www.renewables.ninja/) PV data is generated with `GSEE`.
