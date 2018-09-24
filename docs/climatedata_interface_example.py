@@ -18,7 +18,7 @@ timeformat = 'other'
 def tilt_function(lat):
     return 0.35396 * lat + 16.84775
 
-params = {'tilt': tilt_function, 'azimuth': 180, 'tracking': 0, 'capacity': 1000, 'data_freq': 'detect'}
+params = {'tilt': tilt_function, 'azim': 180, 'tracking': 0, 'capacity': 1000, 'data_freq': 'detect'}
 use_pdfs = True
 pdfs_file_path='/home/username/PDFs/MERRA2_rad3x3_2011-2015-PDFs_land_prox.nc4'
 

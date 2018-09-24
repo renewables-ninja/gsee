@@ -22,7 +22,7 @@ The provided data files must be in the the ```netCDF``` format and contain at le
 The main function has the following parameters: (imported with ```import gsee.climdata_interface.interface```)
 
 ```python
-def run_interface(ghi_tuple: tuple, outfile: str, params: dict, diffuse_tuple=('', ''),       
+def run_interface(ghi_tuple: tuple, outfile: str, params: dict, diffuse_tuple=('', ''),
                   temp_tuple=('', ''), timeformat='other', use_pdfs=True,
                   pdfs_file_path='', num_cores=multiprocessing.cpu_count()):
 ```
@@ -31,7 +31,7 @@ def run_interface(ghi_tuple: tuple, outfile: str, params: dict, diffuse_tuple=('
 
 * __`ghi_tuple`__: Tuple containing the filepath and the name of the data-variable for the mean total horizontal solar iradiance. E.g. `('/home/user/data/th_solar_.nc', 'rsds')`
 * __`outfile`__: File path and name for the output file. E.g. */home/username/GSEE/output-file.nc*
-* __`params`__: Dictionary, containing entries for each parameter used by the GSEE: `'tilt', 'azimuth', 'tracking', 'capacity'`. Additionally `'data_freq'` is also stored in this dict. Temporal resolution of the input data. Accepts the following strings: `['A', 'S', 'M', 'D', 'H']`, which stand for *annual, seasonal, monthly, daily, hourly* data. Also `'detect'` can be stored in `'data_freq'` then the script will try to guess the frequency from the input data. Instead of a number you can also pass a function depending on latitute for `tilt`, see Example.
+* __`params`__: Dictionary, containing entries for each parameter used by the GSEE: `'tilt', 'azim', 'tracking', 'capacity'`. Additionally `'data_freq'` is also stored in this dict. Temporal resolution of the input data. Accepts the following strings: `['A', 'S', 'M', 'D', 'H']`, which stand for *annual, seasonal, monthly, daily, hourly* data. Also `'detect'` can be stored in `'data_freq'` then the script will try to guess the frequency from the input data. Instead of a number you can also pass a function depending on latitute for `tilt`, see Example.
 
 **Optional Paramters:**
 
@@ -94,7 +94,7 @@ timeformat = 'other'
 def tilt_function(lat):
     return 0.35396 * lat + 16.84775
 
-params = {'tilt': tilt_function, 'azimuth': 180, 'tracking': 0, 'capacity': 1, 'data_freq': 'detect'}
+params = {'tilt': tilt_function, 'azim': 180, 'tracking': 0, 'capacity': 1, 'data_freq': 'detect'}
 use_pdfs = True
 pdfs_file_path='/home/username/PDFs/MERRA2_rad3x3_2011-2015-PDFs_land_prox.nc4'
 

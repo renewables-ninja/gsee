@@ -1,22 +1,26 @@
+import pytest
+
+import datetime as dt
+import multiprocessing
+import random
+
+import numpy as np
+import pandas as pd
+import xarray as xr
+
 import gsee.climatedata_interface.pre_gsee_processing as pre
 import gsee.climatedata_interface.kt_h_sinusfunc as cyth
-import datetime as dt
-import random
-import pandas as pd
-import numpy as np
-from gsee.climatedata_interface.pre_gsee_processing import PVstation
-import xarray as xr
-import multiprocessing
-import pytest
 
 
 def test_add_kd_run_gsee():
     df = pd.DataFrame(data={'global_horizontal': 1000 * np.random.rand(25) / 2,
                             'temperature': np.random.randint(0, 25, 25)},
                       index=pd.DatetimeIndex(start='2000-05-18', periods=25, freq='D'))
-    station = PVstation(35, 180, 0, 1000, 'D')
+    coords = (0, 0)
+    frequency = 'detect'
+    params = {'tilt': 35, 'azim': 180, 'tracking': 0, 'capacity': 1000}
 
-    result = pre.add_kd_run_gsee(df, station)
+    result = pre.add_kd_run_gsee(df, coords, frequency, params)
     assert type(result) == pd.Series
     assert len(df['global_horizontal'] == len(result))
     assert np.array_equal(df.index.values, result.index.values)
@@ -31,13 +35,13 @@ def test_resample_for_gsee():
                         coords={'time': pd.date_range(start='2000-01-01', periods=48, freq=freq),
                                 'lat': [coords[0]], 'lon': [coords[1]]})
         ds = ds.sel(lat=coords[0], lon=coords[1])
-        params = {'tilt': 35, 'azimuth': 180, 'tracking': 0, 'capacity': 1000, 'data_freq': freq[0]}
+        params = {'tilt': 35, 'azim': 180, 'tracking': 0, 'capacity': 1000,}
         manager = multiprocessing.Manager()
         shr_mem = manager.list([None] * 48)
         prog_mem = manager.list()
         prog_mem.append(48)
 
-        pre.resample_for_gsee(ds, params, i, coords, shr_mem, prog_mem)
+        pre.resample_for_gsee(ds, freq[0], params, i, coords, shr_mem, prog_mem)
 
         shr_obj = shr_mem[i].resample(time=freq).pad()
         assert isinstance(shr_obj, xr.Dataset)
@@ -62,13 +66,13 @@ def test_resample_for_gsee_with_pdfs():
                         coords={'bins': range(0, 128), 'month': range(1, 13),
                                 'lat': [coords[0]], 'lon': [coords[1]]})
         ds_pdfs = ds_pdfs.sel(lat=coords[0], lon=coords[1])
-        params = {'tilt': 35, 'azimuth': 180, 'tracking': 0, 'capacity': 1000, 'data_freq': freq[0]}
+        params = {'tilt': 35, 'azim': 180, 'tracking': 0, 'capacity': 1000}
         manager = multiprocessing.Manager()
         shr_mem = manager.list([None] * 48)
         prog_mem = manager.list()
         prog_mem.append(48)
 
-        pre.resample_for_gsee_with_pdfs(ds, params, i, coords, shr_mem, prog_mem, ds_pdfs)
+        pre.resample_for_gsee(ds, freq[0], params, i, coords, shr_mem, prog_mem, ds_pdfs)
 
         shr_obj = shr_mem[i].resample(time=freq).pad()
         assert isinstance(shr_obj, xr.Dataset)

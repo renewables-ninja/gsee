@@ -2,7 +2,7 @@
 
 # GSEE: global solar energy estimator
 
-`GSEE` is a solar energy simulation library designed for speed and ease of use. [Renewables.ninja](https://www.renewables.ninja/) PV data is generated with `GSEE`.
+`GSEE` is a solar energy simulation library designed for rapid calculations and ease of use. [Renewables.ninja](https://www.renewables.ninja/) uses `GSEE`.
 
 ## Requirements
 
@@ -64,18 +64,25 @@ plane_irradiance = gsee.trigon.aperture_irradiance(
 
 ### Climate data Interface
 
+Example use directly reading NetCDF files with GHI, diffuse irradiance fraction, and temperature data:
+
 ```python
-def run_interface(ghi_tuple: tuple, outfile: str, params: dict, diffuse_tuple=('', ''),
-                  temp_tuple=('', ''), timeformat='other', use_pdfs=True,
-                  pdfs_file_path='', num_cores=multiprocessing.cpu_count()):
+run_interface(
+    ghi_tuple=('ghi_input.nc', 'ghi'),  # Tuple of (input file path, variable name)
+    diffuse_tuple=('diffuse_fraction_input.nc', 'diff_frac'),
+    temp_tuple=('temperature_input.nc', 't2m'),
+    outfile='output_file.nc',
+    params=dict(tilt=35, azim=180, tracking=0, capacity=1000)
+)
 ```
 
-Instead of letting the script read and prepare the data, a xarray dataset can also be passed directly to the following function (e.g. when using the module in combination with a larger application):
+Instead of letting the climate data interface read and prepare data from NetCDF files, an `xarray.Dataset` can also be passed directly (e.g. when using the module in combination with a larger application):
 
 ```python
-def run_interface_from_dataset(ds_in: xr.Dataset, params: dict, use_pdfs=True,
-                                pdfs_file_path='', num_cores=multiprocessing.cpu_count())
-                                 -> xr.Dataset:
+result = run_interface_from_dataset(
+    data=my_dataset,  # my_dataset is an xarray.Dataset
+    params=dict(tilt=35, azim=180, tracking=0, capacity=1000)
+)
 ```
 
 For more information, see the [climate data interface documentation](docs/climatedata-interface.md).

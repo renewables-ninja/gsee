@@ -11,7 +11,11 @@ from gsee import trigon, brl_model
 from gsee import pv as pv_model
 
 
-def add_kd_run_gsee(df: pd.DataFrame, station) -> pd.Series:
+def add_kd_run_gsee(
+        df: pd.DataFrame,
+        coords: dict,
+        frequency: str,
+        params: dict) -> pd.Series:
     """
     Calculates diffuse fraction with extraterrestrial radiation and Erb's model and creates
     sinusoidal durinal cycle to create an average day for each month
@@ -20,8 +24,7 @@ def add_kd_run_gsee(df: pd.DataFrame, station) -> pd.Series:
     ----------
     df : Pandas Dataframe
         containing with single day per month and 'global_horizontal', 'temperature' column
-    station : object of type PVstation
-        containing coords, tilt, azimuth, tracking, capacity, data_freq information
+
 
     Returns
     -------
@@ -29,16 +32,14 @@ def add_kd_run_gsee(df: pd.DataFrame, station) -> pd.Series:
         containing column 'pv' with simulated PV power output
     """
 
-    coords = station.coords
-
     tmp_df = df.copy()
-    #Add time of day and eccentricity coefficient
+    # Add time of day and eccentricity coefficient
     tmp_df['n'] = tmp_df.index.map(lambda x: x.timetuple().tm_yday)
     tmp_df['Eo'] = tmp_df['n'].map(ecc_corr)
 
-    if station.data_freq == 'H' and 'diffuse_fraction' not in tmp_df.columns:
+    if frequency == 'H' and 'diffuse_fraction' not in tmp_df.columns:
         # Calculate sunset and sunrise times and write to dataframe:
-        if not 'rise_set' in tmp_df:
+        if 'rise_set' not in tmp_df:
             daily_df = tmp_df.resample(rule='D').pad()
             daily_df['rise_set'] = trigon.sun_rise_set_times(daily_df.index, coords)
             daily_df = daily_df.reindex(pd.date_range(tmp_df.index[0], tmp_df.index[-1], freq='H'), method='ffill')
@@ -61,9 +62,8 @@ def add_kd_run_gsee(df: pd.DataFrame, station) -> pd.Series:
             tmp_df_kd.drop([col], axis=1, inplace=True)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        pv_h = pv_model.run_model(data=tmp_df_kd, coords=coords, tilt=station.tilt, azim=station.azim,
-                              tracking=station.tracking, capacity=station.capacity)
-    if station.data_freq != 'H':
+        pv_h = pv_model.run_model(data=tmp_df_kd, coords=coords, **params)
+    if frequency != 'H':
         pv = pv_h.resample(rule='1D').sum()
         pv = pv[pv.index.isin(df.index)]
     else:
@@ -74,98 +74,82 @@ def add_kd_run_gsee(df: pd.DataFrame, station) -> pd.Series:
     return pv
 
 
-def resample_for_gsee(ds: xr.Dataset, params: dict, i: int, coords: tuple, shr_mem: list, prog_mem: list):
+def resample_for_gsee(
+        ds: xr.Dataset,
+        frequency: str,
+        params: dict,
+        i: int,
+        coords: tuple,
+        shr_mem: list,
+        prog_mem: list,
+        ds_pdfs=None):
     """
-    Converts the incoming dataset to dataframe and prepares if for GSEE it depending on the temporal resolution.
+    Converts the incoming dataset to dataframe and prepares it
+    for GSEE it depending on the temporal resolution.
 
     Parameters
     ----------
-    ds : xarray dataser
+    ds : xarray Dataset
         containing timeseries data of selected coordinates (coords)
-    instation : Object of type PVstation
-        PVstation object where tilt has not been set yet, but all other attributes are
-    coords : Tuple
+    frequency: str
+    params : dict
+    i : int
+    coords : tuple
         coordinates of pv station (lat, lon)
-    shr_mem : shared List
+    shr_mem : shared list
         shared memory where all the calculated pv time series are stored
-    prog_mem : List
+    prog_mem : list
         list indicating the overall progress of the computation, first value ([0]) is the total number
         of coordinate tuples to compute.
+    ds_pdfs : xarray Dataset, optional
+        Dataset containing xk, pk values for selected coordinates.
+
     """
     df = ds.to_dataframe()
-    station = PVstation(params['tilt'], params['azimuth'], params['tracking'], params['capacity'], params['data_freq'])
-    if callable(station.tilt):
-        station.tilt = station.tilt(coords[0])
-    station.coords = coords
-    # Store data_freq in station object:
-    data_freq = station.data_freq
-    df = df.drop(['lon', 'lat'], axis=1)
+
+    if callable(params['tilt']):
+        params['tilt'] = params['tilt'](coords[0])
+
     for col in df.columns:
         if col not in ['global_horizontal', 'diffuse_fraction', 'temperature']:
             df.drop([col], axis=1, inplace=True)
+
     df = df.replace([np.inf, -np.inf], 0)
 
-    if data_freq == 'A':
+    if ds_pdfs is None:
+        return _resample_without_pdfs(df, frequency, params, i, coords, shr_mem, prog_mem)
+    else:
+        return _resample_with_pdfs(df, frequency, params, i, coords, shr_mem, prog_mem, ds_pdfs)
+
+
+def _resample_without_pdfs(df, frequency, params, i, coords, shr_mem, prog_mem):
+    if frequency == 'A':
         # Create 2 days, one in spring and one in autumn, which are then calculated by GSEE
         df.ix[df.index[-1] + pd.DateOffset(years=1)] = np.full(len(df.columns), 0)
         df_yearly12 = df.resample(rule='Q').pad()
         df_yearly12 = df_yearly12[0:-1:2]
-        pv = add_kd_run_gsee(df=df_yearly12, station=station)
+        pv = add_kd_run_gsee(df_yearly12, coords, frequency, params)
         pv = pv.resample(rule='A').mean()
-    elif data_freq in ['S', 'M', 'D']:
-        pv = add_kd_run_gsee(df=df, station=station)
-    elif data_freq == 'H':
+    elif frequency in ['S', 'M', 'D']:
+        pv = add_kd_run_gsee(df, coords, frequency, params)
+    elif frequency == 'H':
         # If diffuse fraction is in df it can be computed directly with the gsee,
         # otherwise 'diffuse_fraction' has to be estimate by BRL-model
         if 'diffuse_fraction' in df.columns:
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
-                pv = pv_model.run_model(data=df, coords=coords, tilt=station.tilt, azim=station.azim,
-                                    tracking=station.tracking, capacity=station.capacity)
+                pv = pv_model.run_model(
+                    data=df, coords=coords, **params)
         else:
-            pv = add_kd_run_gsee(df=df, station=station)
+            pv = add_kd_run_gsee(df, coords, frequency, params)
+
     return_pv(pv, shr_mem, prog_mem, coords, i)
 
 
-def resample_for_gsee_with_pdfs(ds: xr.Dataset , params: dict, i: int, coords: tuple,
-                                shr_mem: list, prog_mem: list, ds_pdfs: xr.Dataset):
-    """
-    Converts the incoming dataset to dataframe and prepares if for GSEE it depending on the temporal resolution,
-    making use of the provide probability denstiy function.
-
-    Parameters
-    ----------
-    ds : xarray dataser
-        containing timeseries data of selected coordinates (coords)
-    instation : Object of type PVstation
-        PVstation object where tilt has not been set yet, but all other attributes are
-    coords : Tuple
-        coordinates of pv station (lat, lon)
-    shr_mem : shared List
-        shared memory where all the calculated pv time series are stored
-    prog_mem : List
-        list indicating the overall progress of the computation, first value ([0]) is the total number
-        of coordinate tuples to compute.
-    ds_pdfs : xarray dataset
-        containing xk, pk values for selected coordinates
-    """
-    df = ds.to_dataframe()
-    station = PVstation(params['tilt'], params['azimuth'], params['tracking'], params['capacity'], params['data_freq'])
-    if callable(station.tilt):
-        station.tilt = station.tilt(coords[0])
-    station.coords = coords
-    df = df.drop(['lon', 'lat'], axis=1)
-    data_freq = station.data_freq
-
-    for col in df.columns:
-        if col not in ['global_horizontal', 'diffuse_fraction', 'temperature']:
-            df.drop([col], axis=1, inplace=True)
-
-    df = df.replace([np.inf, -np.inf], 0)
-
+def _resample_with_pdfs(df, frequency, params, i, coords, shr_mem, prog_mem, ds_pdfs):
     # Annual and seasonal data are first upsampled to monthly values and then for each month the
     # corresponding number of days is drawn from the PDFs (Probability density functions)
-    if data_freq == 'S':
+    if frequency == 'S':
         df = df.resample(rule='QS-DEC').bfill()
 
     df_all = pd.DataFrame()
@@ -174,9 +158,9 @@ def resample_for_gsee_with_pdfs(ds: xr.Dataset , params: dict, i: int, coords: t
         year = row.name.year
         start_month = row.name.month
         n_months = 1
-        if data_freq == 'A':
+        if frequency == 'A':
             n_months = 12
-        elif data_freq == 'S':
+        elif frequency == 'S':
             n_months = 3
         rand_days_list = []
         temperatures = []
@@ -202,27 +186,17 @@ def resample_for_gsee_with_pdfs(ds: xr.Dataset , params: dict, i: int, coords: t
         df_pdf.index.name = 'time'
         df_all = pd.concat([df_all, df_pdf])
 
-    pv = add_kd_run_gsee(df=df_all, station=station)
-    if data_freq != 'S':
-        pv = pv.resample(rule=data_freq).mean()
-    elif data_freq == 'S':
+    pv = add_kd_run_gsee(df_all, coords, frequency, params)
+    if frequency != 'S':
+        pv = pv.resample(rule=frequency).mean()
+    elif frequency == 'S':
         pv = pv.resample(rule='QS-DEC').mean()
     return_pv(pv, shr_mem, prog_mem, coords, i)
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-# Support functions::
+# Support functions
 # ----------------------------------------------------------------------------------------------------------------------
-
-
-class PVstation:
-    def __init__(self, tilt, azim, tracking, capacity, data_freq):
-        self.azim = azim
-        self.tilt = tilt
-        self.tracking = tracking
-        self.capacity = capacity
-        self.coords = (0,0) #Format (lat, lon) as GSEE needs it like this
-        self.data_freq = data_freq
 
 
 def create_rand_month(xk: np.ndarray, pk: np.ndarray, n: int) -> np.ndarray:
