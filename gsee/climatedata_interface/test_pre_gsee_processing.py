@@ -28,20 +28,20 @@ def test_add_kd_run_gsee():
 
 
 def test_resample_for_gsee():
-    l = 48
-    data = np.linspace(100, 800, l)
+    data_l = 48
+    data = np.linspace(100, 800, data_l)
     for freq in ['AS', 'D', 'H']:
         coords = (45, 8.5)
         i = 12
         ds = xr.Dataset(data_vars={'global_horizontal': (('time'), data)},
-                        coords={'time': pd.date_range(start='2000-01-01', periods=l, freq=freq),
+                        coords={'time': pd.date_range(start='2000-01-01', periods=data_l, freq=freq),
                                 'lat': [coords[0]], 'lon': [coords[1]]})
         ds = ds.sel(lat=coords[0], lon=coords[1])
         params = {'tilt': 35, 'azim': 180, 'tracking': 0, 'capacity': 1000,}
         manager = multiprocessing.Manager()
-        shr_mem = manager.list([None] * l)
+        shr_mem = manager.list([None] * data_l)
         prog_mem = manager.list()
-        prog_mem.append(l)
+        prog_mem.append(data_l)
 
         pre.resample_for_gsee(ds, freq[0], params, i, coords, shr_mem, prog_mem)
 
@@ -56,7 +56,7 @@ def test_resample_for_gsee():
         assert shr_obj.sizes['lon'] == 1
         assert np.array_equal(ds['time'].values, shr_obj['time'].values)
         with open('test_results/resample_for_gsee_{}.txt'.format(freq), 'rb') as f:
-            result_target = np.reshape(np.fromfile(f, sep=','), (1, 1, l))
+            result_target = np.reshape(np.fromfile(f, sep=','), (1, 1, data_l))
 
         for i, res in enumerate(result_target.flatten()):
             compare = shr_obj['pv'].values.flatten()[i]
@@ -69,12 +69,12 @@ def test_resample_for_gsee():
 def test_resample_for_gsee_with_pdfs():
     np.random.seed(222)
     for freq in ['AS', 'MS']:
-        l = 2 if freq == 'AS' else 24
-        data = np.linspace(100, 800, l)
+        data_l = 2 if freq == 'AS' else 24
+        data = np.linspace(100, 800, data_l)
         coords = (45, 8.5)
-        i = int(l / 2)
+        i = int(data_l / 2)
         ds = xr.Dataset(data_vars={'global_horizontal': (('time'), data)},
-                        coords={'time': pd.date_range(start='2000-01-01', periods=l, freq=freq),
+                        coords={'time': pd.date_range(start='2000-01-01', periods=data_l, freq=freq),
                                 'lat': [coords[0]], 'lon': [coords[1]]})
         ds = ds.sel(lat=coords[0], lon=coords[1])
         ds_pdfs = xr.Dataset(data_vars={'xk': (('bins', 'month'), 10000 * np.random.rand(128, 12) / 2),
@@ -84,9 +84,9 @@ def test_resample_for_gsee_with_pdfs():
         ds_pdfs = ds_pdfs.sel(lat=coords[0], lon=coords[1])
         params = {'tilt': 35, 'azim': 180, 'tracking': 0, 'capacity': 1000}
         manager = multiprocessing.Manager()
-        shr_mem = manager.list([None] * l)
+        shr_mem = manager.list([None] * data_l)
         prog_mem = manager.list()
-        prog_mem.append(l)
+        prog_mem.append(data_l)
         pre.resample_for_gsee(ds, freq[0], params, i, coords, shr_mem, prog_mem, ds_pdfs)
         shr_obj = shr_mem[i].resample(time=freq).pad()
         assert isinstance(shr_obj, xr.Dataset)
@@ -99,7 +99,7 @@ def test_resample_for_gsee_with_pdfs():
         # with open('test_results/resample_for_gsee_with_pdf{}.txt'.format(freq), 'wb') as f:
         #     shr_obj['pv'].values.tofile(f, sep=',')
         with open('test_results/resample_for_gsee_with_pdf{}.txt'.format(freq), 'rb') as f:
-            result_target = np.reshape(np.fromfile(f, sep=','), (1, 1, l))
+            result_target = np.reshape(np.fromfile(f, sep=','), (1, 1, data_l))
         for i, res in enumerate(result_target.flatten()):
             compare = shr_obj['pv'].values.flatten()[i]
             if np.isnan(res):

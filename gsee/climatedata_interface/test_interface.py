@@ -14,14 +14,14 @@ def results_interface_from_dataset(frequency, l):
 
 
 def test_run_interface_from_dataset():
-    l = 48
-    x1 = np.linspace(0, 500, l)
-    x2 = np.linspace(100, 800, l)
-    x3 = np.linspace(500, 900, l)
-    x4 = np.linspace(400, 1000, l)
+    data_l = 48
+    x1 = np.linspace(0, 500, data_l)
+    x2 = np.linspace(100, 800, data_l)
+    x3 = np.linspace(500, 900, data_l)
+    x4 = np.linspace(400, 1000, data_l)
 
     data = [[x1, x2], [x3, x4]]
-    data = np.reshape(data, (l, 2, 2))
+    data = np.reshape(data, (data_l, 2, 2))
     for freq in ['A', 'S', 'M', 'D', 'H']:
 
         freq_string = freq if freq != 'S' else 'QS-DEC'
@@ -31,7 +31,7 @@ def test_run_interface_from_dataset():
                 data)
             },
             coords={
-                'time': pd.date_range(start='2000-01-01', periods=l, freq=freq_string),
+                'time': pd.date_range(start='2000-01-01', periods=data_l, freq=freq_string),
                 'lat': [40, 50], 'lon': [8.5, 9.5]
             }
         )
@@ -45,7 +45,7 @@ def test_run_interface_from_dataset():
         # with open('test_results/run_interface_from_dataset_{}.txt'.format(freq), 'wb') as f:
         #     result['pv'].values.tofile(f, sep=',')
         with open('test_results/run_interface_from_dataset_{}.txt'.format(freq), 'rb') as f:
-            result_target = np.reshape(np.fromfile(f, sep=','), (l, 2, 2))
+            result_target = np.reshape(np.fromfile(f, sep=','), (data_l, 2, 2))
         assert np.array_equal(result['pv'].values, result_target)
 
 
