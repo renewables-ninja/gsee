@@ -10,13 +10,14 @@ from scipy import spatial
 import xarray as xr
 
 from gsee.climatedata_interface.pre_gsee_processing import resample_for_gsee
+from gsee.climatedata_interface import util
 
 
 def run_interface_from_dataset(
         data: xr.Dataset,
         params: dict,
         frequency='detect',
-        pdfs_file=None,
+        pdfs_file='builtin',
         num_cores=multiprocessing.cpu_count()) -> xr.Dataset:
     """
     Parameters
@@ -37,6 +38,8 @@ def run_interface_from_dataset(
     pdfs_file: str, optional
         Path to a NetCDF file with probability density functions to use
         for each month. Only for annual, seasonal and monthly data.
+        Default is 'builtin', which automatically downloads and uses a
+        built-in global PDF based on MERRA-2 data. Set to None to disable.
     num_cores: int, optional
         Number of cores that should be used for the computation.
         Default is all available cores.
@@ -68,12 +71,18 @@ def run_interface_from_dataset(
 
     if pdfs_file is not None:
         if frequency in ['A', 'S', 'M']:
-            pdfs = xr.open_dataset(pdfs_file, autoclose=True)
+            if pdfs_file == 'builtin':
+                pdfs = xr.open_dataset(util.return_pdf_path(), autoclose=True)
+            else:
+                pdfs = xr.open_dataset(pdfs_file, autoclose=True)
             pdf_coords = list(product(pdfs['lat'].values, pdfs['lon'].values))
             tree = spatial.KDTree(pdf_coords)
             coord_list_nn = [pdf_coords[int(tree.query([x])[1])] for x in coord_list]
         else:
-            raise ValueError('If `pdfs_file` given, frequency must be "A", "M", or "D"')
+            raise ValueError(
+                'For frequencies other than "A", "M", or "D", '
+                '`pdfs_file` must be explicitly set to None.'
+            )
 
     if num_cores > 1:
         print('Parallel mode: {} cores'.format(num_cores))
@@ -118,7 +127,7 @@ def run_interface(
         diffuse_tuple=('', ''),
         temp_tuple=('', ''),
         timeformat=None,
-        pdfs_file=None,
+        pdfs_file='builtin',
         num_cores=multiprocessing.cpu_count()):
     """
     Input file must include 'time', 'lat' and 'lon' dimensions.
@@ -154,6 +163,8 @@ def run_interface(
     pdfs_file: str, optional
         Path to a NetCDF file with probability density functions to use
         for each month. Only for annual, seasonal and monthly data.
+        Default is 'builtin', which automatically downloads and uses a
+        built-in global PDF based on MERRA-2 data. Set to None to disable.
     num_cores: int, optional
         Number of cores that should be used for the computation.
         Default is all available cores.
@@ -319,7 +330,7 @@ def _parse_cmip_time_data(ds: xr.Dataset):
     """
     # Translates date-string used in CMIP5 data to datetime-objects
     timestr = [str(ti) for ti in ds['time'].values]
-    vfunc = np.vectorize(lambda x: np.datetime64('{}-{}-{}T{:02d}-{}'.format(
+    vfunc = np.vectorize(lambda x: np.datetime64('{}-{}-{}T{:02d}:{}'.format(
         x[:4], x[4:6], x[6:8], int(24 * float('0.' + x[9:])), '00'))
     )
     return vfunc(timestr)

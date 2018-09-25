@@ -125,7 +125,7 @@ def resample_for_gsee(
 def _resample_without_pdfs(df, frequency, params, i, coords, shr_mem, prog_mem):
     if frequency == 'A':
         # Create 2 days, one in spring and one in autumn, which are then calculated by GSEE
-        df.ix[df.index[-1] + pd.DateOffset(years=1)] = np.full(len(df.columns), 0)
+        df.loc[df.index[-1] + pd.DateOffset(years=1)] = np.full(len(df.columns), 0)
         df_yearly12 = df.resample(rule='Q').pad()
         df_yearly12 = df_yearly12[0:-1:2]
         pv = add_kd_run_gsee(df_yearly12, coords, frequency, params)
@@ -283,7 +283,7 @@ def convert_to_durinal(data: pd.DataFrame, coords: tuple, factor=1) -> pd.DataFr
         """
         df = indf.copy()
         # add line at the end so resample treats it like a whole day:
-        df.ix[df.index[-1] + pd.Timedelta('1D')] = np.full(len(df.columns), 0)
+        df.loc[df.index[-1] + pd.Timedelta('1D')] = np.full(len(df.columns), 0)
         df = df.resample(rule='1H').pad(limit=23)
         # removing last line again:
         df = df.drop(df.index[-1])

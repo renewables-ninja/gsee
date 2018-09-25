@@ -46,6 +46,7 @@ setup(
     ext_modules=ext_modules,
     zip_safe=False,
     install_requires=[
+        "joblib >= 0.12",
         "numpy >= 1.15.0",
         "pandas >= 0.23.4",
         "pyephem >= 3.7.6",
@@ -57,8 +58,7 @@ setup(
         "numpy >= 1.15",
     ],
     extras_require={
-        'multicore': ["joblib >= 0.12"],
-        'monthly_pdfs': ["basemap >= 1.1.0", "seaborn >= 0.9.0"],
+        'generate_pdfs': ["basemap >= 1.1.0", "seaborn >= 0.9.0"],
     },
     classifiers=[
         'Development Status :: 4 - Beta',

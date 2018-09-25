@@ -22,7 +22,7 @@ def test_run_interface_from_dataset():
             }
         )
         params = {'tilt': 35, 'azim': 180, 'tracking': 0, 'capacity': 1}
-        result = interface.run_interface_from_dataset(ds, params, freq)
+        result = interface.run_interface_from_dataset(ds, params, freq, pdfs_file=None)
 
         assert type(result) == xr.Dataset
         assert ds.dims == result.dims

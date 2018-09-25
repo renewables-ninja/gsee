@@ -1,6 +1,6 @@
 [![Build Status](https://img.shields.io/travis/com/renewables-ninja/gsee/master.svg?style=flat-square)](https://travis-ci.com/renewables-ninja/gsee) [![Coverage](https://img.shields.io/coveralls/renewables-ninja/gsee.svg?style=flat-square)](https://coveralls.io/r/renewables-ninja/gsee) [![PyPI version](https://img.shields.io/pypi/v/gsee.svg?style=flat-square)](https://pypi.python.org/pypi/gsee)
 
-# GSEE: global solar energy estimator
+# GSEE: Global Solar Energy Estimator
 
 `GSEE` is a solar energy simulation library designed for rapid calculations and ease of use. [Renewables.ninja](https://www.renewables.ninja/) uses `GSEE`.
 
@@ -8,10 +8,11 @@
 
 Works only with Python 3. Required libraries:
 
-* [pyephem](https://pypi.org/project/ephem/)
+* [joblib](https://joblib.readthedocs.io/en/latest/)
 * [numpy](https://numpy.org/)
-* [scipy](https://scipy.org/)
 * [pandas](https://pandas.pydata.org/)
+* [pyephem](https://pypi.org/project/ephem/)
+* [scipy](https://scipy.org/)
 * [xarray](https://xarray.pydata.org/)
 
 ## Installation
@@ -67,23 +68,36 @@ plane_irradiance = gsee.trigon.aperture_irradiance(
 Example use directly reading NetCDF files with GHI, diffuse irradiance fraction, and temperature data:
 
 ```python
+from gsee.climatedata_interface.interface import run_interface
+
 run_interface(
     ghi_tuple=('ghi_input.nc', 'ghi'),  # Tuple of (input file path, variable name)
     diffuse_tuple=('diffuse_fraction_input.nc', 'diff_frac'),
     temp_tuple=('temperature_input.nc', 't2m'),
     outfile='output_file.nc',
-    params=dict(tilt=35, azim=180, tracking=0, capacity=1000)
+    params=dict(tilt=35, azim=180, tracking=0, capacity=1000),
+    frequency='detect'
 )
+```
+
+Tilt can be given as a latitude-dependent function instead of static value:
+
+```python
+params = dict(tilt=lambda lat: 0.35396 * lat + 16.84775, ...)
 ```
 
 Instead of letting the climate data interface read and prepare data from NetCDF files, an `xarray.Dataset` can also be passed directly (e.g. when using the module in combination with a larger application):
 
 ```python
+from gsee.climatedata_interface.interface import run_interface_from_dataset
+
 result = run_interface_from_dataset(
     data=my_dataset,  # my_dataset is an xarray.Dataset
     params=dict(tilt=35, azim=180, tracking=0, capacity=1000)
 )
 ```
+
+By default, a built-in file with monthly probability density functions is automatically downloaded and used to generate synthetic daily irradiance.
 
 For more information, see the [climate data interface documentation](docs/climatedata-interface.md).
 
