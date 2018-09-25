@@ -28,22 +28,26 @@ def test_add_kd_run_gsee():
 
 
 def test_resample_for_gsee():
+    l = 48
+    data = np.linspace(100, 800, l)
     for freq in ['AS', 'D', 'H']:
         coords = (45, 8.5)
-        i = np.random.randint(0, 48)
-        ds = xr.Dataset(data_vars={'global_horizontal': (('time'), np.random.rand(48) / 2)},
-                        coords={'time': pd.date_range(start='2000-01-01', periods=48, freq=freq),
+        i = 12
+        ds = xr.Dataset(data_vars={'global_horizontal': (('time'), data)},
+                        coords={'time': pd.date_range(start='2000-01-01', periods=l, freq=freq),
                                 'lat': [coords[0]], 'lon': [coords[1]]})
         ds = ds.sel(lat=coords[0], lon=coords[1])
         params = {'tilt': 35, 'azim': 180, 'tracking': 0, 'capacity': 1000,}
         manager = multiprocessing.Manager()
-        shr_mem = manager.list([None] * 48)
+        shr_mem = manager.list([None] * l)
         prog_mem = manager.list()
-        prog_mem.append(48)
+        prog_mem.append(l)
 
         pre.resample_for_gsee(ds, freq[0], params, i, coords, shr_mem, prog_mem)
 
         shr_obj = shr_mem[i].resample(time=freq).pad()
+        # with open('test_results/resample_for_gsee_{}.txt'.format(freq), 'wb') as f:
+        #     shr_obj['pv'].values.tofile(f, sep=',')
         assert isinstance(shr_obj, xr.Dataset)
         assert len(shr_obj.data_vars) == 1
         assert 'pv' in shr_obj.data_vars
@@ -51,29 +55,39 @@ def test_resample_for_gsee():
         assert shr_obj.sizes['lat'] == 1
         assert shr_obj.sizes['lon'] == 1
         assert np.array_equal(ds['time'].values, shr_obj['time'].values)
+        with open('test_results/resample_for_gsee_{}.txt'.format(freq), 'rb') as f:
+            result_target = np.reshape(np.fromfile(f, sep=','), (1, 1, l))
+
+        for i, res in enumerate(result_target.flatten()):
+            compare = shr_obj['pv'].values.flatten()[i]
+            if np.isnan(res):
+                assert np.isnan(compare)
+            else:
+                assert compare == res
 
 
 def test_resample_for_gsee_with_pdfs():
+    np.random.seed(222)
     for freq in ['AS', 'MS']:
+        l = 2 if freq == 'AS' else 24
+        data = np.linspace(100, 800, l)
         coords = (45, 8.5)
-        i = np.random.randint(0, 48)
-        ds = xr.Dataset(data_vars={'global_horizontal': (('time'), np.random.rand(48) / 2)},
-                        coords={'time': pd.date_range(start='2000-01-01', periods=48, freq=freq),
+        i = int(l / 2)
+        ds = xr.Dataset(data_vars={'global_horizontal': (('time'), data)},
+                        coords={'time': pd.date_range(start='2000-01-01', periods=l, freq=freq),
                                 'lat': [coords[0]], 'lon': [coords[1]]})
         ds = ds.sel(lat=coords[0], lon=coords[1])
-        ds_pdfs = xr.Dataset(data_vars={'xk': (('bins', 'month'), 10 * np.random.rand(128, 12) / 2),
+        ds_pdfs = xr.Dataset(data_vars={'xk': (('bins', 'month'), 10000 * np.random.rand(128, 12) / 2),
                                         'pk': (('bins', 'month'), np.random.rand(128, 12))},
                         coords={'bins': range(0, 128), 'month': range(1, 13),
                                 'lat': [coords[0]], 'lon': [coords[1]]})
         ds_pdfs = ds_pdfs.sel(lat=coords[0], lon=coords[1])
         params = {'tilt': 35, 'azim': 180, 'tracking': 0, 'capacity': 1000}
         manager = multiprocessing.Manager()
-        shr_mem = manager.list([None] * 48)
+        shr_mem = manager.list([None] * l)
         prog_mem = manager.list()
-        prog_mem.append(48)
-
+        prog_mem.append(l)
         pre.resample_for_gsee(ds, freq[0], params, i, coords, shr_mem, prog_mem, ds_pdfs)
-
         shr_obj = shr_mem[i].resample(time=freq).pad()
         assert isinstance(shr_obj, xr.Dataset)
         assert len(shr_obj.data_vars) == 1
@@ -82,6 +96,17 @@ def test_resample_for_gsee_with_pdfs():
         assert shr_obj.sizes['lat'] == 1
         assert shr_obj.sizes['lon'] == 1
         assert np.array_equal(ds['time'].values, shr_obj['time'].values)
+        # with open('test_results/resample_for_gsee_with_pdf{}.txt'.format(freq), 'wb') as f:
+        #     shr_obj['pv'].values.tofile(f, sep=',')
+        with open('test_results/resample_for_gsee_with_pdf{}.txt'.format(freq), 'rb') as f:
+            result_target = np.reshape(np.fromfile(f, sep=','), (1, 1, l))
+        for i, res in enumerate(result_target.flatten()):
+            compare = shr_obj['pv'].values.flatten()[i]
+            if np.isnan(res):
+                assert np.isnan(compare)
+            else:
+                assert compare == res
+    np.random.seed()
 
 
 def test_kt_h():
