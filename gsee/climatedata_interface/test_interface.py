@@ -7,27 +7,46 @@ import xarray as xr
 import gsee.climatedata_interface.interface as interface
 
 
+def results_interface_from_dataset(frequency, l):
+    with open('test_results/run_interface_from_dataset_{}'.format(frequency), 'rb') as f:
+        result_target = np.fromfile(f, sep=',')
+    return np.reshape(result_target, (l, 2, 2))
+
+
 def test_run_interface_from_dataset():
+    l = 48
+    x1 = np.linspace(0, 500, l)
+    x2 = np.linspace(100, 800, l)
+    x3 = np.linspace(500, 900, l)
+    x4 = np.linspace(400, 1000, l)
+
+    data = [[x1, x2], [x3, x4]]
+    data = np.reshape(data, (l, 2, 2))
     for freq in ['A', 'S', 'M', 'D', 'H']:
 
         freq_string = freq if freq != 'S' else 'QS-DEC'
         ds = xr.Dataset(
             data_vars={'global_horizontal': (
                 ('time', 'lat', 'lon'),
-                1000 * np.random.rand(48, 2, 2) / 2)
+                data)
             },
             coords={
-                'time': pd.date_range(start='2000-01-01', periods=48, freq=freq_string),
+                'time': pd.date_range(start='2000-01-01', periods=l, freq=freq_string),
                 'lat': [40, 50], 'lon': [8.5, 9.5]
             }
         )
-        params = {'tilt': 35, 'azim': 180, 'tracking': 0, 'capacity': 1}
+        params = {'tilt': 35, 'azim': 180, 'tracking': 0, 'capacity': 1000}
         result = interface.run_interface_from_dataset(ds, params, freq, pdfs_file=None)
 
         assert type(result) == xr.Dataset
         assert ds.dims == result.dims
         assert np.array_equal(ds['time'].values, result['time'].values)
         assert 'pv' in result.variables
+        # with open('test_results/run_interface_from_dataset_{}.txt'.format(freq), 'wb') as f:
+        #     result['pv'].values.tofile(f, sep=',')
+        with open('test_results/run_interface_from_dataset_{}.txt'.format(freq), 'rb') as f:
+            result_target = np.reshape(np.fromfile(f, sep=','), (l, 2, 2))
+        assert np.array_equal(result['pv'].values, result_target)
 
 
 def test_mod_time_dim():
