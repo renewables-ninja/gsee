@@ -28,18 +28,26 @@ def test_add_kd_run_gsee():
 
 
 def test_resample_for_gsee():
+    data_l = 48
+    data = np.linspace(100, 800, data_l)
+    expected_results = {'AS': (365045.483471, 7766.925180), 'D': (382281.03563, 7964.188242),
+                        'H': (15260.843902, 317.934248)}
     for freq in ['AS', 'D', 'H']:
+        if freq == 'H':
+            data = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 4.9, 87.9, 231.2, 385.6, 478.1, 507.1, 580.3, 630.3, 508.5, 316.1,
+                    208.1, 80.9, 3.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 5.3, 72.9, 121.3, 164.3, 358.5,
+                    854.5, 904.0, 938.0, 917.0, 844.3, 551.8, 519.8, 454.3, 205.8, 70.0, 4.4, 0.0, 0.0, 0.0]
         coords = (45, 8.5)
-        i = np.random.randint(0, 48)
-        ds = xr.Dataset(data_vars={'global_horizontal': (('time'), np.random.rand(48) / 2)},
-                        coords={'time': pd.date_range(start='2000-01-01', periods=48, freq=freq),
+        i = 12
+        ds = xr.Dataset(data_vars={'global_horizontal': (('time'), data)},
+                        coords={'time': pd.date_range(start='2000-01-01', periods=data_l, freq=freq),
                                 'lat': [coords[0]], 'lon': [coords[1]]})
         ds = ds.sel(lat=coords[0], lon=coords[1])
         params = {'tilt': 35, 'azim': 180, 'tracking': 0, 'capacity': 1000,}
         manager = multiprocessing.Manager()
-        shr_mem = manager.list([None] * 48)
+        shr_mem = manager.list([None] * data_l)
         prog_mem = manager.list()
-        prog_mem.append(48)
+        prog_mem.append(data_l)
 
         pre.resample_for_gsee(ds, freq[0], params, i, coords, shr_mem, prog_mem)
 
@@ -51,29 +59,33 @@ def test_resample_for_gsee():
         assert shr_obj.sizes['lat'] == 1
         assert shr_obj.sizes['lon'] == 1
         assert np.array_equal(ds['time'].values, shr_obj['time'].values)
+        assert shr_obj['pv'].sum() == pytest.approx(expected_results[freq][0], abs=1e-5)
+        assert np.nanmean(shr_obj['pv'].values) == pytest.approx(expected_results[freq][1], abs=1e-5)
 
 
 def test_resample_for_gsee_with_pdfs():
+    np.random.seed(222)
+    expected_results = {'AS': (2630.23302, 2630.233019), 'MS': (147932.454225, 6431.845836)}
     for freq in ['AS', 'MS']:
+        data_l = 2 if freq == 'AS' else 24
+        data = np.linspace(100, 800, data_l)
         coords = (45, 8.5)
-        i = np.random.randint(0, 48)
-        ds = xr.Dataset(data_vars={'global_horizontal': (('time'), np.random.rand(48) / 2)},
-                        coords={'time': pd.date_range(start='2000-01-01', periods=48, freq=freq),
+        i = int(data_l / 2)
+        ds = xr.Dataset(data_vars={'global_horizontal': (('time'), data)},
+                        coords={'time': pd.date_range(start='2000-01-01', periods=data_l, freq=freq),
                                 'lat': [coords[0]], 'lon': [coords[1]]})
         ds = ds.sel(lat=coords[0], lon=coords[1])
-        ds_pdfs = xr.Dataset(data_vars={'xk': (('bins', 'month'), 10 * np.random.rand(128, 12) / 2),
+        ds_pdfs = xr.Dataset(data_vars={'xk': (('bins', 'month'), 10000 * np.random.rand(128, 12) / 2),
                                         'pk': (('bins', 'month'), np.random.rand(128, 12))},
                         coords={'bins': range(0, 128), 'month': range(1, 13),
                                 'lat': [coords[0]], 'lon': [coords[1]]})
         ds_pdfs = ds_pdfs.sel(lat=coords[0], lon=coords[1])
         params = {'tilt': 35, 'azim': 180, 'tracking': 0, 'capacity': 1000}
         manager = multiprocessing.Manager()
-        shr_mem = manager.list([None] * 48)
+        shr_mem = manager.list([None] * data_l)
         prog_mem = manager.list()
-        prog_mem.append(48)
-
+        prog_mem.append(data_l)
         pre.resample_for_gsee(ds, freq[0], params, i, coords, shr_mem, prog_mem, ds_pdfs)
-
         shr_obj = shr_mem[i].resample(time=freq).pad()
         assert isinstance(shr_obj, xr.Dataset)
         assert len(shr_obj.data_vars) == 1
@@ -82,6 +94,8 @@ def test_resample_for_gsee_with_pdfs():
         assert shr_obj.sizes['lat'] == 1
         assert shr_obj.sizes['lon'] == 1
         assert np.array_equal(ds['time'].values, shr_obj['time'].values)
+        assert shr_obj['pv'].sum() == pytest.approx(expected_results[freq][0], abs=1e-5)
+        assert np.nanmean(shr_obj['pv'].values) == pytest.approx(expected_results[freq][1], abs=1e-5)
 
 
 def test_kt_h():
