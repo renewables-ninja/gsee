@@ -96,7 +96,6 @@ def test_resample_for_gsee_with_pdfs():
         assert np.array_equal(ds['time'].values, shr_obj['time'].values)
         assert shr_obj['pv'].sum() == pytest.approx(expected_results[freq][0], abs=1e-5)
         assert np.nanmean(shr_obj['pv'].values) == pytest.approx(expected_results[freq][1], abs=1e-5)
-    np.random.seed()
 
 
 def test_kt_h():
