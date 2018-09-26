@@ -52,8 +52,6 @@ def test_resample_for_gsee():
         pre.resample_for_gsee(ds, freq[0], params, i, coords, shr_mem, prog_mem)
 
         shr_obj = shr_mem[i].resample(time=freq).pad()
-        # with open('test_results/resample_for_gsee_{}.txt'.format(freq), 'wb') as f:
-        #     shr_obj['pv'].values.tofile(f, sep=',')
         assert isinstance(shr_obj, xr.Dataset)
         assert len(shr_obj.data_vars) == 1
         assert 'pv' in shr_obj.data_vars
