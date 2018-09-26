@@ -13,33 +13,23 @@ import numpy as np
 import pandas as pd
 
 
-def _sun_rise_set(datetime_index, obs):
+def _get_rise_and_set_time(date, sun, obs):
     """
-    Returns a list of (sunrise, sunset) tuples for the datetimes
-    in the given datetime_index, assuming that the index is daily.
-
-    Sunrise or sunset will be None if the sun doesn't rise/set.
-
+    Returns a tuple of (rise, set) time for the given date, sun and observer.
     """
-    sun = ephem.Sun()
-    times = []
+    obs.date = date
+    sun.compute(obs)
 
-    def _get_datetime(date):
-        obs.date = date
-        sun.compute(obs)
-        if sun.rise_time is None:
-            rise_time = None
-        else:
-            rise_time = sun.rise_time.datetime()
-        if sun.set_time is None:
-            set_time = None
-        else:
-            set_time = sun.set_time.datetime()
-        return (rise_time, set_time)
+    # Up to and including v0.2.1, old API was implicitly setting use_center
+    # to True, but considering the sun's radius leads to slightly more
+    # realistic rise/set time
+    rising = obs.next_rising(sun, use_center=False)
+    setting = obs.next_setting(sun, use_center=False)
 
-    for i in datetime_index:
-        times.append(_get_datetime(i))
-    return times
+    rise_time = None if not rising else rising.datetime()
+    set_time = None if not setting else setting.datetime()
+
+    return (rise_time, set_time)
 
 
 def sun_rise_set_times(datetime_index, coords):
@@ -48,13 +38,18 @@ def sun_rise_set_times(datetime_index, coords):
     as a Series indexed by date (days, resampled from the datetime_index).
 
     """
+    sun = ephem.Sun()
     obs = ephem.Observer()
     obs.lat = str(coords[0])
     obs.lon = str(coords[1])
+
     # Ensure datetime_index is daily
-    dtindex = pd.DatetimeIndex(datetime_index.to_series().map(pd.Timestamp.date).unique())
+    dtindex = pd.DatetimeIndex(
+        datetime_index.to_series().map(pd.Timestamp.date).unique()
+    )
+
     return pd.Series(
-        _sun_rise_set(dtindex, obs),
+        [_get_rise_and_set_time(i, sun, obs) for i in dtindex],
         index=dtindex
     )
 

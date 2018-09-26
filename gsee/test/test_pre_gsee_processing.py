@@ -30,8 +30,11 @@ def test_add_kd_run_gsee():
 def test_resample_for_gsee():
     data_l = 48
     data = np.linspace(100, 800, data_l)
-    expected_results = {'AS': (365045.483471, 7766.925180), 'D': (382281.03563, 7964.188242),
-                        'H': (15260.843902, 317.934248)}
+    expected_results = {
+        'AS': (366112.891239, 7789.635983),
+        'D': (384515.728381, 8010.744341),
+        'H': (15306.762448, 318.8908843)
+    }
     for freq in ['AS', 'D', 'H']:
         if freq == 'H':
             data = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 4.9, 87.9, 231.2, 385.6, 478.1, 507.1, 580.3, 630.3, 508.5, 316.1,
@@ -65,7 +68,10 @@ def test_resample_for_gsee():
 
 def test_resample_for_gsee_with_pdfs():
     np.random.seed(222)
-    expected_results = {'AS': (2630.23302, 2630.233019), 'MS': (147932.454225, 6431.845836)}
+    expected_results = {
+        'AS': (2642.10882, 2642.108819),
+        'MS': (148373.038062, 6451.001654)
+    }
     for freq in ['AS', 'MS']:
         data_l = 2 if freq == 'AS' else 24
         data = np.linspace(100, 800, data_l)
