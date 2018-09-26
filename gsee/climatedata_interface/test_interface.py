@@ -7,12 +7,6 @@ import xarray as xr
 import gsee.climatedata_interface.interface as interface
 
 
-def results_interface_from_dataset(frequency, l):
-    with open('test_results/run_interface_from_dataset_{}'.format(frequency), 'rb') as f:
-        result_target = np.fromfile(f, sep=',')
-    return np.reshape(result_target, (l, 2, 2))
-
-
 def test_run_interface_from_dataset():
     data_l = 48
     x1 = np.linspace(0, 500, data_l)
@@ -22,8 +16,16 @@ def test_run_interface_from_dataset():
 
     data = [[x1, x2], [x3, x4]]
     data = np.reshape(data, (data_l, 2, 2))
+    expected_results = {'A': (1547942.795286, 8062.202059), 'S': (1457723.107841, 7592.307853),
+                        'M': (1444118.63898, 7521.451244), 'D': (1466356.44216, 7637.273136),
+                        'H': (46683.085223, 243.141069)}
     for freq in ['A', 'S', 'M', 'D', 'H']:
-
+        if freq == 'H':
+            x = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 4.9, 87.9, 231.2, 385.6, 478.1, 507.1, 580.3, 630.3, 508.5, 316.1,
+                    208.1, 80.9, 3.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 5.3, 72.9, 121.3, 164.3, 358.5,
+                    854.5, 904.0, 938.0, 917.0, 844.3, 551.8, 519.8, 454.3, 205.8, 70.0, 4.4, 0.0, 0.0, 0.0]
+            data = [[x, x], [x, x]]
+            data = np.reshape(data, (data_l, 2, 2))
         freq_string = freq if freq != 'S' else 'QS-DEC'
         ds = xr.Dataset(
             data_vars={'global_horizontal': (
@@ -42,11 +44,8 @@ def test_run_interface_from_dataset():
         assert ds.dims == result.dims
         assert np.array_equal(ds['time'].values, result['time'].values)
         assert 'pv' in result.variables
-        # with open('test_results/run_interface_from_dataset_{}.txt'.format(freq), 'wb') as f:
-        #     result['pv'].values.tofile(f, sep=',')
-        with open('test_results/run_interface_from_dataset_{}.txt'.format(freq), 'rb') as f:
-            result_target = np.reshape(np.fromfile(f, sep=','), (data_l, 2, 2))
-        assert np.array_equal(result['pv'].values, result_target)
+        assert result['pv'].sum() == pytest.approx(expected_results[freq][0], abs=1e-5)
+        assert np.nanmean(result['pv'].values) == pytest.approx(expected_results[freq][1], abs=1e-5)
 
 
 def test_mod_time_dim():
