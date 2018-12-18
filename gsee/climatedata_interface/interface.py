@@ -120,12 +120,12 @@ def run_interface_from_dataset(
 
 
 def run_interface(
-        ghi_tuple: tuple,
+        ghi_data: tuple,
         outfile: str,
         params: dict,
         frequency='detect',
-        diffuse_tuple=('', ''),
-        temp_tuple=('', ''),
+        diffuse_data=('', ''),
+        temp_data=('', ''),
         timeformat=None,
         pdfs_file='builtin',
         num_cores=multiprocessing.cpu_count()):
@@ -134,7 +134,7 @@ def run_interface(
 
     Parameters
     ----------
-    ghi_tuple: tuple
+    ghi_data: tuple
         Tuple with path to a NetCDF file with diffuse fraction data
         and variable name in that file.
     outfile: string
@@ -148,11 +148,11 @@ def run_interface(
         Frequency of the input data. One of ['A', 'S', 'M', 'D', 'H'],
         for annual, seasonal, monthly, daily, hourly. Defaults to 'detect',
         whith attempts to automatically detect the correct frequency.
-    diffuse_tuple: tuple, optional
+    diffuse_data: tuple, optional
         Tuple with path to a NetCDF file with diffuse fraction data
         and variable name in that file. If not given, BRL model is
         used to estimate diffuse fraction.
-    temp_tuple: tuple, optional
+    temp_data: tuple, optional
         Tuple with path to a NetCDF file with temperature data (°C or °K)
         and variable name in that file. If not given, constant
         temperatore of 20 degrees C is assumed.
@@ -176,7 +176,7 @@ def run_interface(
     """
 
     # Read Files:
-    ds_merged, ds_in = _open_files(ghi_tuple, diffuse_tuple, temp_tuple)
+    ds_merged, ds_in = _open_files(ghi_data, diffuse_data, temp_data)
 
     # If 'cmip5' is given the string of the form %Y%m%d.%f will be transformed to datetime object
     if timeformat == 'cmip5':
@@ -336,18 +336,18 @@ def _parse_cmip_time_data(ds: xr.Dataset):
     return vfunc(timestr)
 
 
-def _open_files(ghi_tuple: tuple, diffuse_tuple: tuple, temp_tuple: tuple):
+def _open_files(ghi_data: tuple, diffuse_data: tuple, temp_data: tuple):
     """
     Opens the given files for GHI, diffuse Fraction and temperature, extracts the corresponding variables
     and merges all three together to one dataset.
 
     Parameters
     ----------
-    ghi_tuple: Tuple
+    ghi_data: Tuple
         with Filepath for .nc file with diffuse fraction data and variable name in that file
-    diffuse_tuple: Tuple
+    diffuse_data: Tuple
         Tuple with Filepath for .nc file with diffuse fraction data and variable name in that file
-    temp_tuple: Tuple
+    temp_data: Tuple
         Tuple with Filepath for .nc file with temperature data (°C or °K) and variable name in that file
 
     Returns
@@ -357,13 +357,13 @@ def _open_files(ghi_tuple: tuple, diffuse_tuple: tuple, temp_tuple: tuple):
     ds_th_in: xarray dataset
         dataset of input file without any being processed. Is used later to detect frequency
     """
-    ghi_file, ghi_var = ghi_tuple
-    diffuse_file, diffuse_var = diffuse_tuple
-    temp_file, temp_var = temp_tuple
+    ghi_file, ghi_var = ghi_data
+    diffuse_file, diffuse_var = diffuse_data
+    temp_file, temp_var = temp_data
 
     try:
         ds_ghi_in = xr.open_dataset(ghi_file, autoclose=True)
-    except:
+    except Exception:
         raise FileNotFoundError('Radiation file not found')
 
     # makes sure only the specified variable gets used further:

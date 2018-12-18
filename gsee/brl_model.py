@@ -148,7 +148,7 @@ def run(hourly_clearness, coords, rise_set_times=None):
     obs = ephem.Observer()
     obs.lat = str(coords[0])
     obs.lon = str(coords[1])
-    if not rise_set_times:
+    if rise_set_times is None:
         rise_set_times = trigon._sun_rise_set(hourly_clearness.index, obs)
     diffuse_fractions = []
     for i in range(0, len(hourly_clearness), 24):

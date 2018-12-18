@@ -225,7 +225,7 @@ def create_rand_month(xk: np.ndarray, pk: np.ndarray, n: int) -> np.ndarray:
             pk = pk / sum(pk)  # normalized so sum(pk)==1
             try:
                 custm = st.rv_discrete(name='custm', values=(xk, pk))
-            except:
+            except Exception:
                 raise ValueError('Sum provided pk is not 1')
             r = custm.rvs(size=n) / multi
             return r
@@ -290,7 +290,7 @@ def convert_to_durinal(data: pd.DataFrame, coords: tuple, factor=1) -> pd.DataFr
         return df.dropna(how='all')
 
     # Calculate sunset and sunrise times and write to dataframe:
-    if not 'rise_set' in data:
+    if 'rise_set' not in data:
         data['rise_set'] = trigon.sun_rise_set_times(data.index, coords)
         data['sunrise_h'] = data['rise_set'].map(lambda x: decimal_hours(x[0], 'sunrise'))
         data['sunset_h'] = data['rise_set'].map(lambda x: decimal_hours(x[1], 'sunset'))
@@ -349,7 +349,7 @@ def decimal_hours(timeobject, rise_or_set: str) -> float:
     assert rise_or_set == 'sunrise' or rise_or_set == 'sunset'
 
     if timeobject:
-        ret =  timeobject.hour + timeobject.minute / 60
+        ret = timeobject.hour + timeobject.minute / 60
         if ret == 0:
             return 0.0
         else:

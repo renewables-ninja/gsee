@@ -71,9 +71,9 @@ Example use directly reading NetCDF files with GHI, diffuse irradiance fraction,
 from gsee.climatedata_interface.interface import run_interface
 
 run_interface(
-    ghi_tuple=('ghi_input.nc', 'ghi'),  # Tuple of (input file path, variable name)
-    diffuse_tuple=('diffuse_fraction_input.nc', 'diff_frac'),
-    temp_tuple=('temperature_input.nc', 't2m'),
+    ghi_data=('ghi_input.nc', 'ghi'),  # Tuple of (input file path, variable name)
+    diffuse_data=('diffuse_fraction_input.nc', 'diff_frac'),
+    temp_data=('temperature_input.nc', 't2m'),
     outfile='output_file.nc',
     params=dict(tilt=35, azim=180, tracking=0, capacity=1000),
     frequency='detect'
