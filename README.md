@@ -23,6 +23,8 @@ Simply install with `pip`:
 
 The recommended way to install the required scientific libraries is to use the [Anaconda Python distribution](https://www.continuum.io/downloads).
 
+**Known issue**: If you do not already have `numpy` installed, you will get a compiler error when pip tries to build to `climatedata_interface` Cython extension.
+
 ## Functionality
 
 The following submodules are available:
@@ -107,7 +109,7 @@ To install the latest development version directly from GitHub:
 
     pip install -e git+https://github.com/renewables-ninja/gsee.git#egg=gsee
 
-To build the `climatedata_interface` submodule, [Cython](http://cython.org/) is required.
+To build the `climatedata_interface` submodule [Cython >= 0.28.5](http://cython.org/) is required.
 
 ## Credits and contact
 

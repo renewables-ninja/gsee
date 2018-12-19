@@ -9,26 +9,34 @@ with open('gsee/_version.py', 'r') as f:
 with open('README.md', 'r') as f:
     long_description = f.read()
 
+# Numpy headers are always required for compliation, but to allow
+# `python setup.py egg_info` to work on install in a clean environment,
+# the numpy import must be wrapped in a try-except block.
+try:
+    import numpy as np
+    numpy_include = [np.get_include()]
+except ImportError:
+    numpy_include = []
+
 # If Cython is available, cythonize the .pyx module to a C source file.
 # Else, use the pre-compiled C module.
 try:
     from Cython.Build import cythonize
-    # If Cython is available, numpy must be available too.
-    import numpy as np
 except ImportError:
     print('Attempting to compile pre-built Cython module')
     from setuptools.command.build_ext import build_ext
     ext_modules = [Extension(
-        "gsee/climatedata_interface/*",
-        ["gsee/climatedata_interface/*.c"]
+        "gsee.climatedata_interface.kt_h_sinusfunc",
+        ["gsee/climatedata_interface/kt_h_sinusfunc.c"],
+        include_dirs=numpy_include
     )]
 else:
     print('Attempting to build Cython module from Cython source')
     ext_modules = cythonize([
         Extension(
-            "gsee/climatedata_interface/*",
-            ["gsee/climatedata_interface/*.pyx"],
-            include_dirs=[np.get_include()]
+            "gsee.climatedata_interface.kt_h_sinusfunc",
+            ["gsee/climatedata_interface/kt_h_sinusfunc.pyx"],
+            include_dirs=numpy_include
         )
     ])
 
@@ -54,8 +62,7 @@ setup(
         "xarray >= 0.10.9",
     ],
     setup_requires=[
-        'Cython >= 0.28.5',
-        "numpy >= 1.15",
+        "numpy >= 1.15.0",
     ],
     extras_require={
         'generate_pdfs': ["basemap >= 1.1.0", "seaborn >= 0.9.0"],
