@@ -121,6 +121,8 @@ def sun_angles(datetime_index, coords, rise_set_times=None):
                        'duration': durations},
                       index=datetime_index)
     df['sun_zenith'] = (np.pi / 2) - df.sun_alt
+    # Sun altitude considered zero if slightly below horizon
+    df['sun_alt'] = df['sun_alt'].clip_lower(0)
     return df
 
 
@@ -135,9 +137,12 @@ def _incidence_single_tracking(sun_alt, tilt, azimuth, sun_azimuth):
         return np.arccos(np.sqrt(1 - np.cos(sun_alt) ** 2
                          * np.cos(sun_azimuth - azimuth) ** 2))
     else:
-        return np.arccos(np.sqrt(1 - (np.cos(sun_alt + tilt) * np.cos(tilt)
-                         * np.cos(sun_alt) * (1 - np.cos(sun_azimuth
-                                                         - azimuth))) ** 2))
+        return np.arccos(
+            np.sqrt((1 - (
+                np.cos(sun_alt + tilt) * np.cos(tilt) * np.cos(sun_alt)
+                * (1 - np.cos(sun_azimuth - azimuth))) ** 2
+            ).clip_lower(0))
+        )
 
 
 def _tilt_single_tracking(sun_alt, tilt, azimuth, sun_azimuth):
