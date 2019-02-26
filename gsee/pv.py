@@ -188,7 +188,7 @@ def run_model(
     system_loss : float, default 0.10
         Total system power losses (fraction).
     angles : pandas DataFrame, default None
-        Solar angles. Ff already computed, speeds up the computations.
+        Solar angles. If already computed, speeds up the computations.
     include_raw_data : bool, default False
         If true, returns a DataFrame instead of Series which includes
         the input data (panel irradiance and temperature).

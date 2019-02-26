@@ -47,7 +47,7 @@ def run_interface_from_dataset(
     Returns
     -------
     xarray Dataset
-        PV power output in Wh/hour if frequency is 'H', else in kWh/day
+        PV power output in Wh/hour if frequency is 'H', else in Wh/day
 
     """
     frequency = _detect_frequency(data, frequency)

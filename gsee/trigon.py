@@ -23,8 +23,15 @@ def _get_rise_and_set_time(date, sun, obs):
     # Up to and including v0.2.1, old API was implicitly setting use_center
     # to True, but considering the sun's radius leads to slightly more
     # realistic rise/set time
-    rising = obs.next_rising(sun, use_center=False)
-    setting = obs.next_setting(sun, use_center=False)
+    try:
+        rising = obs.next_rising(sun, use_center=False)
+    except (ephem.AlwaysUpError, ephem.NeverUpError):
+        rising = None
+
+    try:
+        setting = obs.next_setting(sun, use_center=False)
+    except (ephem.AlwaysUpError, ephem.NeverUpError):
+        setting = None
 
     rise_time = None if not rising else rising.datetime()
     set_time = None if not setting else setting.datetime()
@@ -122,7 +129,7 @@ def sun_angles(datetime_index, coords, rise_set_times=None):
                       index=datetime_index)
     df['sun_zenith'] = (np.pi / 2) - df.sun_alt
     # Sun altitude considered zero if slightly below horizon
-    df['sun_alt'] = df['sun_alt'].clip_lower(0)
+    df['sun_alt'] = df['sun_alt'].clip(lower=0)
     return df
 
 
@@ -141,7 +148,7 @@ def _incidence_single_tracking(sun_alt, tilt, azimuth, sun_azimuth):
             np.sqrt((1 - (
                 np.cos(sun_alt + tilt) * np.cos(tilt) * np.cos(sun_alt)
                 * (1 - np.cos(sun_azimuth - azimuth))) ** 2
-            ).clip_lower(0))
+            ).clip(lower=0))
         )
 
 
@@ -209,9 +216,9 @@ def aperture_irradiance(direct, diffuse, coords,
     else:
         raise ValueError('Invalid setting for tracking: {}'.format(tracking))
     # 4. Compute direct and diffuse irradiance on plane
-    # clip_lower(0) ensures that very low panel to sun altitude angles do not
+    # Clipping ensures that very low panel to sun altitude angles do not
     # result in negative direct irradiance (reflection)
-    plane_direct = (dni * np.cos(incidence)).fillna(0).clip_lower(0)
+    plane_direct = (dni * np.cos(incidence)).fillna(0).clip(lower=0)
     plane_diffuse = (diffuse * ((1 + np.cos(panel_tilt)) / 2)
                      + albedo * (direct + diffuse)
                      * ((1 - np.cos(panel_tilt)) / 2)).fillna(0)
