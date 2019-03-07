@@ -64,35 +64,25 @@ class PVPanel(object):
         # Panel characteristics
         self.panel_aperture = panel_aperture
         self.panel_ref_efficiency = panel_ref_efficiency
-        self.use_diffuse = True  # Whether to also use diffuse irradiance
         # Panel temperature estimation
         self.c_temp_tamb = c_temp_amb
         self.c_temp_irrad = c_temp_irrad
 
-    def panel_power(self, direct, diffuse=None, tamb=None):
+    def panel_power(self, irradiance, tamb=None):
         """
         Returns electricity in W from PV panel(s) based on given input data.
 
         Parameters
         ----------
-        direct : pandas Series
-            Direct irradiance hitting the panel(s) in W/m2.
-        diffuse : pandas Series, default None
-            Diffuse irradiance hitting the panel(s) in W/m2.
+        irradiance : pandas Series
+            Incident irradiance hitting the panel(s) in W/m2.
         tamb : pandas Series, default None
             Ambient temperature in deg C. If not given, R_TAMB is used
             for all values.
 
         """
-        index_msg = 'Data indices must match'
-        if diffuse is not None:
-            assert direct.index.equals(diffuse.index), index_msg
         if tamb is not None:
-            assert direct.index.equals(tamb.index), index_msg
-        if self.use_diffuse:
-            irradiance = direct + diffuse
-        else:
-            irradiance = direct
+            assert irradiance.index.equals(tamb.index), 'Data indices must match'
         return (irradiance * self.panel_aperture
                 * self.panel_relative_efficiency(irradiance, tamb)
                 * self.panel_ref_efficiency)
@@ -279,8 +269,8 @@ def run_model(
         **kwargs)
 
     # Run the panel model and return output
-    output = panel.panel_power(
-        irrad.direct, irrad.diffuse, tamb)
+    irradiance = irrad.direct + irrad.diffuse
+    output = panel.panel_power(irradiance, tamb)
     dc_out = pd.Series(output, index=datetimes).clip(upper=capacity)
 
     if inverter_capacity is None:
