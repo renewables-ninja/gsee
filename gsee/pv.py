@@ -88,6 +88,24 @@ class PVPanel(object):
                 * self.panel_ref_efficiency)
 
     def panel_relative_efficiency(self, irradiance, tamb):
+        raise NotImplementedError(
+            'Must subclass and specify relative efficiency function'
+        )
+
+
+class SingleDiodePanel(PVPanel):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def panel_relative_efficiency(self, irradiance, tamb):
+        pass  # FIXME
+
+
+class HuldPanel(PVPanel):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def panel_relative_efficiency(self, irradiance, tamb):
         """
         Returns the relative conversion efficiency modifier as a
         function of irradiance and ambient temperature.
@@ -123,10 +141,10 @@ class PVPanel(object):
         return eff
 
 
-class CSiPanel(PVPanel):
+class HuldCSiPanel(HuldPanel):
     """c-Si technology, based on data from {1}"""
     def __init__(self, **kwargs):
-        super(CSiPanel, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.k_1 = -0.017162
         self.k_2 = -0.040289
         self.k_3 = -0.004681
@@ -135,10 +153,10 @@ class CSiPanel(PVPanel):
         self.k_6 = 0.000005
 
 
-class CdTePanel(PVPanel):
+class HuldCdTePanel(HuldPanel):
     """CdTe technology, based on data from {1}"""
     def __init__(self, **kwargs):
-        super(CdTePanel, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.k_1 = -0.103251
         self.k_2 = -0.040446
         self.k_3 = -0.001667
@@ -148,8 +166,8 @@ class CdTePanel(PVPanel):
 
 
 _PANEL_TYPES = {
-    'csi': CSiPanel,
-    'cdte': CdTePanel
+    'csi': HuldCSiPanel,
+    'cdte': HuldCdTePanel
 }
 
 
