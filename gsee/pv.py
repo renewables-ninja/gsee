@@ -8,6 +8,9 @@ Sources:
     effects of module type and data averaging. Solar Energy, 84(2),
     p.324-338. DOI: 10.1016/j.solener.2009.12.002
 
+{2} Dobos, Aron P., 2014. PVWatts Version 5 Manual. NREL Technical
+    Report. Available at: https://www.nrel.gov/docs/fy14osti/62641.pdf
+
 
 General assumptions made:
 -------------------------
@@ -160,8 +163,44 @@ _PANEL_TYPES = {
 }
 
 
+class Inverter(object):
+    """
+    PV inverter curve from {2}.
+
+    By default, we assume that nominal DC-to-AC efficiency
+    is 1.0, so that AC and DC nameplate capacities are equal.
+
+    """
+    def __init__(self, ac_capacity, eff_ref=0.9637, eff_nom=1.0):
+        super().__init__()
+        self.ac_capacity = ac_capacity
+        self.dc_capacity = ac_capacity / eff_nom
+        self.efficiency_term = eff_nom / eff_ref
+
+    def ac_output(self, dc_in):
+        """
+        Parameters
+        ----------
+        df_in : float
+            DC electricity input in W
+
+        Returns
+        -------
+        ac_output : float
+            AC electricity output in W
+
+        """
+        if dc_in == 0:
+            return 0
+        else:
+            zeta = dc_in / self.dc_capacity
+            eff = self.efficiency_term * (-0.0162 * zeta - 0.0059 / zeta + 0.9858)
+            return min(self.ac_capacity, dc_in * eff)
+
+
 def run_model(
         data, coords, tilt, azim, tracking, capacity,
+        inverter_capacity=None, use_inverter=True,
         technology='csi', system_loss=0.10, angles=None,
         include_raw_data=False, **kwargs):
     """
@@ -182,11 +221,16 @@ def run_model(
     tracking : int
         Tracking (0: none, 1: 1-axis, 2: 2-axis).
     capacity : float
-        Installed capacity in W.
+        Installed DC panel capacity in W.
+    inverter_capacity : float, optional
+        Installed AC inverter capacity in W. If not given, the DC panel
+        capacity is assumed to be equal to AC inverter capacity.
+    use_inverter : bool, optional
+        Model inverter capacity and inverter losses (defaults to True).
     technology : str, default 'csi'
         Panel technology, must be one of 'csi', 'cdte', 'cpv'
     system_loss : float, default 0.10
-        Total system power losses (fraction).
+        Additional system losses not caused by panel and inverter (fraction).
     angles : pandas DataFrame, default None
         Solar angles. If already computed, speeds up the computations.
     include_raw_data : bool, default False
@@ -206,8 +250,7 @@ def run_model(
     # Process data
     dir_horiz = data.global_horizontal * (1 - data.diffuse_fraction)
     diff_horiz = data.global_horizontal * data.diffuse_fraction
-    # TODO more flexibilty when passing in data, e.g. allow passing in
-    # other combinations of data like DNI + global horizontal
+
     # NB: aperture_irradiance expects azim/tilt in radians!
     irrad = trigon.aperture_irradiance(dir_horiz, diff_horiz, coords,
                                        tracking=tracking,
@@ -230,27 +273,35 @@ def run_model(
     panel_efficiency = 0.1
     area_per_capacity = 0.001 / panel_efficiency
 
-    # TODO allow panel_aperture to change through day as shading takes place
-    panel = panel_class(panel_aperture=capacity * area_per_capacity,
-                        panel_ref_efficiency=panel_efficiency,
-                        **kwargs)
+    panel = panel_class(
+        panel_aperture=capacity * area_per_capacity,
+        panel_ref_efficiency=panel_efficiency,
+        **kwargs)
 
     # Run the panel model and return output
-    # TODO this ignores details like shading due to close panels
-    output = panel.panel_power(irrad.direct,
-                               irrad.diffuse,
-                               tamb)
-    sim = pd.Series(output, index=datetimes).clip_upper(capacity) * (1 - system_loss)
-    if include_raw_data:
-        items = [
-            ('output', sim),
-            ('direct', irrad.direct),
-            ('diffuse', irrad.diffuse),
-            ('temperature', tamb)
-        ]
-        return pd.DataFrame.from_items(items)
+    output = panel.panel_power(
+        irrad.direct, irrad.diffuse, tamb)
+    dc_out = pd.Series(output, index=datetimes).clip(upper=capacity)
+
+    if inverter_capacity is None:
+        inverter_capacity = capacity
+
+    if use_inverter:
+        inverter = Inverter(inverter_capacity)
+        ac_out = dc_out.apply(inverter.ac_output).clip(lower=0)
+        ac_out_final = ac_out * (1 - system_loss)
     else:
-        return sim
+        ac_out_final = dc_out * (1 - system_loss)
+
+    if include_raw_data:
+        return pd.DataFrame.from_dict({
+            'output': ac_out_final,
+            'direct': irrad.direct,
+            'diffuse': irrad.diffuse,
+            'temperature': tamb,
+        })
+    else:
+        return ac_out_final
 
 
 def optimal_tilt(lat):
