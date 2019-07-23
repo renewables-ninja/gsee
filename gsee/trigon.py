@@ -41,7 +41,7 @@ def _get_rise_and_set_time(date, sun, obs):
 
 def sun_rise_set_times(datetime_index, coords):
     """
-    Return sunrise and set times for the given datetime_index and coords,
+    Returns sunrise and set times for the given datetime_index and coords,
     as a Series indexed by date (days, resampled from the datetime_index).
 
     """
@@ -62,7 +62,8 @@ def sun_rise_set_times(datetime_index, coords):
 
 
 def sun_angles(datetime_index, coords, rise_set_times=None):
-    """Calculate sun angles. Returns a dataframe containing `sun_alt`,
+    """
+    Calculates sun angles. Returns a dataframe containing `sun_alt`,
     `sun_zenith`, `sun_azimuth` and `duration` over the passed datetime index.
 
     Parameters
@@ -134,53 +135,94 @@ def sun_angles(datetime_index, coords, rise_set_times=None):
 
 
 def _incidence_fixed(sun_alt, tilt, azimuth, sun_azimuth):
+    """Returns incidence angle for a fixed panel"""
     return np.arccos(np.sin(sun_alt) * np.cos(tilt)
                      + np.cos(sun_alt) * np.sin(tilt)
                      * np.cos(azimuth - sun_azimuth))
 
 
 def _incidence_single_tracking(sun_alt, tilt, azimuth, sun_azimuth):
+    """
+    Returns incidence angle for a 1-axis tracking panel
+
+    Parameters
+    ----------
+    sun_alt : sun altitude angle
+    tilt : tilt of tilt axis
+    azimuth : rotation of tilt axis
+    sun_azimuth : sun azimuth angle
+
+    """
     if tilt == 0:
-        return np.arccos(np.sqrt(1 - np.cos(sun_alt) ** 2
-                         * np.cos(sun_azimuth - azimuth) ** 2))
+        return np.arccos(np.sqrt(
+            1 - np.cos(sun_alt) ** 2
+            * np.cos(sun_azimuth - azimuth) ** 2
+        ))
     else:
-        return np.arccos(
-            np.sqrt((1 - (
-                np.cos(sun_alt + tilt) * np.cos(tilt) * np.cos(sun_alt)
-                * (1 - np.cos(sun_azimuth - azimuth))) ** 2
-            ).clip(lower=0))
-        )
+        return np.arccos(np.sqrt(
+            1 - (
+                np.cos(sun_alt + tilt)
+                - np.cos(tilt) * np.cos(sun_alt) * (1 - np.cos(sun_azimuth - azimuth))
+            ) ** 2
+        ))
 
 
 def _tilt_single_tracking(sun_alt, tilt, azimuth, sun_azimuth):
+    """
+    Returns panel tilt angle for a 1-axis tracking panel
+
+    Parameters
+    ----------
+    sun_alt : sun altitude angle
+    tilt : tilt of tilt axis
+    azimuth : rotation of tilt axis
+    sun_azimuth : sun azimuth angle
+
+    """
     if tilt == 0:
-        return np.arctan(np.sin(sun_azimuth - azimuth) / np.tan(sun_alt))
+        return np.arctan(
+            np.sin(sun_azimuth - azimuth) / np.tan(sun_alt)
+        )
     else:
-        return np.arctan((np.cos(sun_alt) * np.sin(sun_azimuth - azimuth))
-                         / (np.sin(sun_alt - tilt) + np.sin(tilt)
-                            * np.cos(sun_alt) * (1 - np.cos(sun_azimuth)
-                                                 - azimuth)))
+        return np.arctan(
+            (np.cos(sun_alt) * np.sin(sun_azimuth - azimuth)) /
+            (
+                np.sin(sun_alt - tilt) +
+                np.sin(tilt) * np.cos(sun_alt) * (1 - np.cos(sun_azimuth - azimuth))
+            )
+        )
 
 
 def aperture_irradiance(direct, diffuse, coords,
                         tilt=0, azimuth=0, tracking=0, albedo=0.3,
                         dni_only=False, angles=None):
     """
-    Args:
-        direct : a series of direct horizontal irradiance with a datetime index
-        diffuse : a series of diffuse horizontal irradiance with the same
-                  datetime index as for direct
-        coords : (lat, lon) tuple of location coordinates
-        tilt : angle of panel relative to the horizontal plane, 0 = flat
-        azimuth : deviation of the tilt direction from the meridian,
-                  0 = towards pole, going clockwise, 3.14 = towards equator
-        tracking : 0 (none, default), 1 (tilt), or 2 (tilt and azimuth).
-                   If 1, azimuth is the orientation of the tilt axis, which
-                   can be horizontal (tilt=0) or tilted.
-        albedo : reflectance of the surrounding surface
-        dni_only : only calculate and directly return a DNI time series
-                   (ignores tilt, azimuth, tracking and albedo arguments)
-        angles : solar angles, if default (None), is computed here
+    Parameters
+    ----------
+
+    direct : pandas.Series
+        Direct horizontal irradiance with a datetime index
+    diffuse : pandas.Series
+        Diffuse horizontal irradiance with the same datetime index as `direct`
+    coords : (float, float)
+        (lat, lon) tuple of location coordinates
+    tilt : float, default=0
+        Angle of panel relative to the horizontal plane.
+        0 = flat.
+    azimuth : float, default=0
+        Deviation of the tilt direction from the meridian.
+        0 = towards pole, going clockwise, 3.14 = towards equator.
+    tracking : int, default=0
+        0 (none, default), 1 (tilt), or 2 (tilt and azimuth).
+        If 1, `tilt` gives the tilt of the tilt axis relative to horizontal
+        (tilt=0) and `azimuth` gives the orientation of the tilt axis.
+    albedo : float, default=0.3
+        reflectance of the surrounding surface
+    dni_only : bool, default False
+        only calculate and directly return a DNI time series (ignores
+        tilt, azimuth, tracking and albedo arguments).
+    angles : pandas.DataFrame, optional
+        Solar angles. If default (None), they are computed automatically.
 
     """
     # 0. Correct azimuth if we're on southern hemisphere, so that 3.14

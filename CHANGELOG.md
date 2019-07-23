@@ -1,5 +1,10 @@
 # Release History
 
+## 0.3.1 (2019-07-23)
+
+* Fixed: erroneous angles in 1-axis tracking with non-horizontal tracking axes
+* Fixed: minor improvement in calculation of sunrise and sunset times to deal with cases where sun never rises or sets
+
 ## 0.3.0 (2018-12-19)
 
 * Added: climate data interface

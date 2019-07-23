@@ -48,6 +48,18 @@ def test_sun_angles(coords_and_datetimes):
     assert angles.loc['2000-01-01 15:00:00', 'duration'] == pytest.approx(45.6333333)
 
 
+@pytest.mark.parametrize("test_input,expected", [
+    ((math.radians(90), math.radians(0), math.radians(0), math.radians(45)), 0),
+    ((math.radians(45), math.radians(5), math.radians(0), math.radians(0)), 40),
+    ((math.radians(0), math.radians(0), math.radians(0), math.radians(45)), 45),
+    ((math.radians(45), math.radians(0), math.radians(90), math.radians(90)), 45),
+    ((math.radians(45), math.radians(5), math.radians(180), math.radians(0)), 50),
+])
+def test_incidence_single_tracking(test_input, expected):
+    result = math.degrees(gsee.trigon._incidence_single_tracking(*test_input))
+    assert result == pytest.approx(expected)
+
+
 def test_aperture_irradiance_dni_only(irradiance, coords_and_datetimes):
     coords = coords_and_datetimes[0]
     direct, diffuse = irradiance['direct'], irradiance['diffuse']
@@ -60,12 +72,15 @@ def test_aperture_irradiance_dni_only(irradiance, coords_and_datetimes):
     assert result.loc['2000-12-31 12:00:00'] == pytest.approx(1448.694722)
 
 
-def _aperture_irradiance(irradiance, coords_and_datetimes, tracking):
+def _aperture_irradiance(
+        irradiance, coords_and_datetimes, tracking,
+        tilt=math.radians(30), azimuth=math.radians(180)):
     coords = coords_and_datetimes[0]
     direct, diffuse = irradiance['direct'], irradiance['diffuse']
     result = gsee.trigon.aperture_irradiance(
         direct, diffuse, coords,
-        tilt=math.radians(30), azimuth=math.radians(180),
+        tilt=tilt,
+        azimuth=azimuth,
         tracking=tracking
     )
     return result
@@ -78,11 +93,20 @@ def test_aperture_irradiance_tracking_0(irradiance, coords_and_datetimes):
     assert result.mean()['diffuse'] == pytest.approx(59.506055)
 
 
-def test_aperture_irradiance_tracking_1(irradiance, coords_and_datetimes):
-    result = _aperture_irradiance(irradiance, coords_and_datetimes, tracking=1)
+def test_aperture_irradiance_tracking_1_horizontal(irradiance, coords_and_datetimes):
+    result = _aperture_irradiance(
+        irradiance, coords_and_datetimes, tracking=1, tilt=0)
     assert isinstance(result, pd.DataFrame)
-    assert result.mean()['direct'] == pytest.approx(255.623662)
-    assert result.mean()['diffuse'] == pytest.approx(59.608747)
+    assert result.mean()['direct'] == pytest.approx(200.394662)
+    assert result.mean()['diffuse'] == pytest.approx(57.748641)
+
+
+def test_aperture_irradiance_tracking_1_30deg(irradiance, coords_and_datetimes):
+    result = _aperture_irradiance(
+        irradiance, coords_and_datetimes, tracking=1, tilt=math.radians(30))
+    assert isinstance(result, pd.DataFrame)
+    assert result.mean()['direct'] == pytest.approx(242.210095)
+    assert result.mean()['diffuse'] == pytest.approx(57.851825)
 
 
 def test_aperture_irradiance_tracking_2(irradiance, coords_and_datetimes):

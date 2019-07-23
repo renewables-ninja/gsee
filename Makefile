@@ -2,6 +2,10 @@
 # Build package and upload to PyPI
 ###
 
+.PHONY : build_ext
+build_ext :
+	python setup.py build_ext --inplace
+
 .PHONY : dist
 dist :
 	python setup.py sdist
