@@ -18,7 +18,7 @@ def test_add_kd_run_gsee():
                       index=pd.DatetimeIndex(start='2000-05-18', periods=25, freq='D'))
     coords = (0, 0)
     frequency = 'detect'
-    params = {'tilt': 35, 'azim': 180, 'tracking': 0, 'capacity': 1000}
+    params = {'tilt': 35, 'azim': 180, 'tracking': 0, 'capacity': 1000, 'use_inverter': False}
 
     result = pre.add_kd_run_gsee(df, coords, frequency, params)
     assert type(result) == pd.Series
@@ -46,7 +46,7 @@ def test_resample_for_gsee():
                         coords={'time': pd.date_range(start='2000-01-01', periods=data_l, freq=freq),
                                 'lat': [coords[0]], 'lon': [coords[1]]})
         ds = ds.sel(lat=coords[0], lon=coords[1])
-        params = {'tilt': 35, 'azim': 180, 'tracking': 0, 'capacity': 1000,}
+        params = {'tilt': 35, 'azim': 180, 'tracking': 0, 'capacity': 1000, 'use_inverter': False}
         manager = multiprocessing.Manager()
         shr_mem = manager.list([None] * data_l)
         prog_mem = manager.list()
@@ -86,7 +86,7 @@ def test_resample_for_gsee_with_pdfs():
                         coords={'bins': range(0, 128), 'month': range(1, 13),
                                 'lat': [coords[0]], 'lon': [coords[1]]})
         ds_pdfs = ds_pdfs.sel(lat=coords[0], lon=coords[1])
-        params = {'tilt': 35, 'azim': 180, 'tracking': 0, 'capacity': 1000}
+        params = {'tilt': 35, 'azim': 180, 'tracking': 0, 'capacity': 1000, 'use_inverter': False}
         manager = multiprocessing.Manager()
         shr_mem = manager.list([None] * data_l)
         prog_mem = manager.list()

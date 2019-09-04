@@ -24,8 +24,9 @@ import warnings
 
 import numpy as np
 import pandas as pd
+import pvlib
 
-from gsee import trigon
+from gsee import trigon, cec_tools
 
 # Constants
 R_TAMB = 20  # Reference ambient temperature (degC)
@@ -49,24 +50,13 @@ class PVPanel(object):
         Panel aperture area (m2)
     ref_efficiency : float
         Reference conversion efficiency
-    c_temp_amb: float, default 1 degC / degC
-        Panel temperature coefficient of ambient temperature
-    c_temp_irrad: float, default 0.035 degC / (W/m2)
-        Panel temperature coefficient of irradiance. According to {1},
-        reasonable values for this for c-Si are:
-            0.035  # Free-standing module, assuming no wind
-            0.05   # Building-integrated module
-
     """
-    def __init__(self, panel_aperture=1.0, panel_ref_efficiency=1.0,
-                 c_temp_amb=1, c_temp_irrad=0.035):
+
+    def __init__(self, panel_aperture=1.0, panel_ref_efficiency=1.0):
         super().__init__()
         # Panel characteristics
         self.panel_aperture = panel_aperture
         self.panel_ref_efficiency = panel_ref_efficiency
-        # Panel temperature estimation
-        self.c_temp_tamb = c_temp_amb
-        self.c_temp_irrad = c_temp_irrad
 
     def panel_power(self, irradiance, tamb=None):
         """
@@ -94,16 +84,60 @@ class PVPanel(object):
 
 
 class SingleDiodePanel(PVPanel):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    """
+    module_params : dict
+        Module params 'alpha_sc', 'a_ref', 'I_L_ref', 'I_o_ref',
+        'R_sh_ref', 'R_s'.
+    ref_windspeed : float, default 5
+        Reference wind speed (m/2).
 
-    def panel_relative_efficiency(self, irradiance, tamb):
-        pass  # FIXME
+    """
+    def __init__(self, module_params, ref_windspeed=5, **kwargs):
+        super().__init__(**kwargs)
+        # Some very simple checking of inputs
+        for k in ['alpha_sc', 'a_ref', 'I_L_ref', 'I_o_ref', 'R_sh_ref', 'R_s']:
+            assert k in module_params
+        self.module_params = module_params
+        self.ref_windspeed = ref_windspeed
+
+    def panel_relative_efficiency(self, irradiance, tamb, windspeed=None):
+        """
+        Returns the relative conversion efficiency modifier as a
+        function of irradiance and ambient temperature.
+
+        All parameters can be either float or pandas.Series.
+
+        """
+        if windspeed is None:
+            windspeed = self.ref_windspeed
+        module_temperature = pvlib.pvsystem.sapm_celltemp(
+            irradiance, windspeed, tamb
+        )['temp_module']
+
+        efficiency = cec_tools.relative_eff(
+            irradiance, module_temperature,
+            self.module_params
+        )
+
+        return efficiency
 
 
 class HuldPanel(PVPanel):
-    def __init__(self, **kwargs):
+    """
+    c_temp_amb: float, default 1 degC / degC
+        Panel temperature coefficient of ambient temperature
+    c_temp_irrad: float, default 0.035 degC / (W/m2)
+        Panel temperature coefficient of irradiance. According to {1},
+        reasonable values for this for c-Si are:
+            0.035  # Free-standing module, assuming no wind
+            0.05   # Building-integrated module
+
+    """
+    def __init__(self, c_temp_amb=1, c_temp_irrad=0.035, **kwargs):
         super().__init__(**kwargs)
+        # Panel temperature estimation
+        self.c_temp_tamb = c_temp_amb
+        self.c_temp_irrad = c_temp_irrad
 
     def panel_relative_efficiency(self, irradiance, tamb):
         """
@@ -153,6 +187,18 @@ class HuldCSiPanel(HuldPanel):
         self.k_6 = 0.000005
 
 
+class HuldCISPanel(HuldPanel):
+    """CIS technology, based on data from {1}"""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.k_1 = -0.005521
+        self.k_2 = -0.038492
+        self.k_3 = -0.003701
+        self.k_4 = -0.000899
+        self.k_5 = -0.001248
+        self.k_6 = 0.000001
+
+
 class HuldCdTePanel(HuldPanel):
     """CdTe technology, based on data from {1}"""
     def __init__(self, **kwargs):
@@ -167,7 +213,8 @@ class HuldCdTePanel(HuldPanel):
 
 _PANEL_TYPES = {
     'csi': HuldCSiPanel,
-    'cdte': HuldCdTePanel
+    'cis': HuldCISPanel,
+    'cdte': HuldCdTePanel,
 }
 
 

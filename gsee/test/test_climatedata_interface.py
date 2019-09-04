@@ -50,7 +50,7 @@ def test_run_interface_from_dataset():
                 'lat': [40, 50], 'lon': [8.5, 9.5]
             }
         )
-        params = {'tilt': 35, 'azim': 180, 'tracking': 0, 'capacity': 1000}
+        params = {'tilt': 35, 'azim': 180, 'tracking': 0, 'capacity': 1000, 'use_inverter': False}
         result = interface.run_interface_from_dataset(ds, params, freq, pdfs_file=None)
 
         assert type(result) == xr.Dataset
