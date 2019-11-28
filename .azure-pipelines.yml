@@ -76,10 +76,10 @@ steps:
       codeCoverageTool: Cobertura
       summaryFileLocation: '$(System.DefaultWorkingDirectory)/**/coverage.xml'
 
-  # - bash: |
-  #     source activate calliope
-  #     codecov
-  #   displayName: Send results to Codecov
-  #   condition: eq( variables['CODECOV'], 'True' )
-  #   env:
-  #     CODECOV_TOKEN: $(CodecovToken)
+  - bash: |
+      source activate gsee
+      codecov
+    displayName: Send results to Codecov
+    condition: eq( variables['CODECOV'], 'True' )
+    env:
+      CODECOV_TOKEN: $(CodecovToken)
