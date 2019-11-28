@@ -23,6 +23,10 @@ except ImportError:
 try:
     from Cython.Build import cythonize
 except ImportError:
+    if not os.path.exists('gsee/climatedata_interface/kt_h_sinusfunc.c'):
+        raise ImportError(
+            'Pre-built Cython module does not exist and Cython cannot be imported. '
+            'Please install Cython.')
     print('Attempting to compile pre-built Cython module')
     from setuptools.command.build_ext import build_ext
     ext_modules = [Extension(
