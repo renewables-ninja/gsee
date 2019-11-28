@@ -1,4 +1,5 @@
-[![Build Status](https://img.shields.io/travis/com/renewables-ninja/gsee/master.svg?style=flat-square)](https://travis-ci.com/renewables-ninja/gsee) [![Coverage](https://img.shields.io/coveralls/renewables-ninja/gsee.svg?style=flat-square)](https://coveralls.io/r/renewables-ninja/gsee) [![PyPI version](https://img.shields.io/pypi/v/gsee.svg?style=flat-square)](https://pypi.python.org/pypi/gsee)
+[![Master branch build status](https://img.shields.io/azure-devops/build/renewables-ninja/dcefb182-6481-4ca4-8f5e-75b022ab426d/1?style=flat-square)](https://dev.azure.com/renewables-ninja/gsee/_build?definitionId=1)
+[![PyPI version](https://img.shields.io/pypi/v/gsee.svg?style=flat-square)](https://pypi.python.org/pypi/gsee)
 
 # GSEE: Global Solar Energy Estimator
 

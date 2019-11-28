@@ -64,6 +64,7 @@ setup(
         "pyephem >= 3.7.6",
         "scipy >= 1.1.0",
         "xarray >= 0.10.9",
+        "pvlib >= 0.6.3",
     ],
     setup_requires=[
         "numpy >= 1.15.0",

@@ -13,3 +13,4 @@ dependencies:
     - scipy >= 1.1.0
     - seaborn >= 0.9.0
     - xarray >= 0.10.9
+    - pvlib-python >= 0.6.3
