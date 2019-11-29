@@ -47,7 +47,7 @@ Optional Parameters:
 * __`frequency`__: Temporal resolution of the input data. In addition to the default, 'detect', accepts the following strings: `['A', 'S', 'M', 'D', 'H']`, which stand for *annual, seasonal, monthly, daily, hourly* data.
 * __`diffuse_data`__: Tuple containing the file path and the name of the data variable for the diffuse fraction. Only useful when horizontal irradiance is provided in hourly resolution. With higher temporal resolutions, the diffuse fraction is always anyways with the BRL model.
 * __`temp_data`__: Tuple containing the file path and the name of the data variable for the ambient temperature. Can be in °C or °K (automatically detected). If no ambient temperature is provided, GSEE will assume 20°C by default.
-* __`timeformat`__: Some CMIP5 datasets have time saved in the format: *day as %Y%m%d.%f* (e.g. '20070104.5'), which `xarray` cannot parse. If that is the case, `'cmip5'` can be passed and the dates will be correctly interpreted.
+* __`timeformat`__: Some CMIP5 or CMIP6 datasets have time saved in the format: *day as %Y%m%d.%f* (e.g. '20070104.5'), which `xarray` cannot parse. If that is the case, `'cmip'` can be passed and the dates will be correctly interpreted.
 * __`pdfs_file`__: Either leave at its default of `'builtin'` to use the built-in PDF file, give path to a PDF file to use, or set to None to disable the use of PDFs.
 * __`num_cores`__: By default all cores are used to parallelise computations. This can be limited here. If `1` is passed, then no parallelisation will be used.
 

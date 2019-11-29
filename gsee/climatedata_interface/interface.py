@@ -157,8 +157,8 @@ def run_interface(
         and variable name in that file. If not given, constant
         temperatore of 20 degrees C is assumed.
     timeformat: string, optional
-        If set to 'cmip5', then the date format common in the CMIP5
-        dataset (e.g. '20070104.5') is correctly dealt with.
+        If set to 'cmip', 'cmip5', or 'cmip6', then the date format common
+        in the CMIP datasets (e.g. '20070104.5') is correctly dealt with.
         Otherwise it is left to xarray to detect the time format.
     pdfs_file: str, optional
         Path to a NetCDF file with probability density functions to use
@@ -178,14 +178,22 @@ def run_interface(
     # Read Files:
     ds_merged, ds_in = _open_files(ghi_data, diffuse_data, temp_data)
 
-    # If 'cmip5' is given the string of the form %Y%m%d.%f will be transformed to datetime object
-    if timeformat == 'cmip5':
+    if timeformat in ['cmip', 'cmip5', 'cmip6']:
         try:
             ds_merged['time'] = _parse_cmip_time_data(ds_merged)
         except Exception:
             raise ValueError(
                 'Parsing of "cmip5" time dimension failed. Set timeformat to None, or check your data.'
             )
+        # Clean up non-standard time attributes.
+        # Why? When xarray encounters time atributes it cannot parse, it
+        # persists them, and later raises an exception when trying to save
+        # results back to NetCDF and attempting to serialise our parsed time
+        # dimension back to units/calendar attributes that it expects
+        # not to already exist
+        for attr in ['units', 'calendar']:
+            if attr in ds_merged.time.attrs:
+                del ds_merged.time.attrs[attr]
 
     # Check whether the time dimension was recognised correctly and interpreted as time by dataset
     if not type(ds_merged['time'].values[0]) is np.datetime64:
