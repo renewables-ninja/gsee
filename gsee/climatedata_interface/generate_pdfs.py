@@ -44,7 +44,7 @@ def create_pdfs_from_ds(ds, outfile, only_land=True, proximity=True, lat_bounds=
 
     time = pd.to_datetime(ds['time'].values)
     ds['time'] = time.map(lambda x: x.month)
-    ds.rename({'time': 'month'}, inplace=True)
+    ds = ds.rename({'time': 'month'})
     coord_list = []
     if only_land:
         bm = Basemap()
@@ -123,7 +123,7 @@ def calc_pdfs(ds, i, shr_mem, prog_mem, coords, len_coord_list):
         xk, pk = sns_distplot(da_mo, ax=ax).get_lines()[0].get_data()
         pk = pk / sum(pk)
         ds_out_mo = pd.DataFrame({'xk': xk, 'pk': pk, 'lat': coords[0], 'lon': coords[1], 'month': mo, 'bins': range(0, len(pk))})
-        ds_out_mo.set_index(['lat', 'lon', 'month', 'bins'], inplace=True)
+        ds_out_mo = ds_out_mo.set_index(['lat', 'lon', 'month', 'bins'])
         ds_out_xk_pk = ds_out_mo.to_xarray().copy()
         ds_out = xr.merge([ds_out, ds_out_xk_pk])
         plt.close()
@@ -131,4 +131,3 @@ def calc_pdfs(ds, i, shr_mem, prog_mem, coords, len_coord_list):
     shr_mem[i] = ds_out
     prog_mem.append(1)
     progress_bar(len(prog_mem), len_coord_list)
-

@@ -15,7 +15,7 @@ import gsee.climatedata_interface.kt_h_sinusfunc as cyth
 def test_add_kd_run_gsee():
     df = pd.DataFrame(data={'global_horizontal': 1000 * np.random.rand(25) / 2,
                             'temperature': np.random.randint(0, 25, 25)},
-                      index=pd.DatetimeIndex(start='2000-05-18', periods=25, freq='D'))
+                      index=pd.date_range(start='2000-05-18', periods=25, freq='D'))
     coords = (0, 0)
     frequency = 'detect'
     params = {'tilt': 35, 'azim': 180, 'tracking': 0, 'capacity': 1000, 'use_inverter': False}
@@ -136,7 +136,7 @@ def test_clearness_index_hourly():
 
 def test_convert_to_diurnal():
     df = pd.DataFrame(data={'global_horizontal': 1000 * np.random.rand(25) / 2},
-                      index=pd.DatetimeIndex(start='2000-05-18', periods=25, freq='D'))
+                      index=pd.date_range(start='2000-05-18', periods=25, freq='D'))
     coords = (45, 10)
     result = pre.convert_to_durinal(df, coords, factor=24)
 

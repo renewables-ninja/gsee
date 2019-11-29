@@ -228,7 +228,7 @@ def run_interface(
 # Support functions for run_interface_from_dataset:
 # ----------------------------------------------------------------------------------------------------------------------
 
-def _mod_time_dim(time_dim: pd.DatetimeIndex, freq: str):
+def _mod_time_dim(time_dim: pd.date_range, freq: str):
     """
     Modify Time dimension so it fits the requirements of the "resample_for_gsee" function
     Parameters
@@ -376,8 +376,7 @@ def _open_files(ghi_data: tuple, diffuse_data: tuple, temp_data: tuple):
 
     # makes sure only the specified variable gets used further:
     ds_ghi = ds_ghi_in[ghi_var].to_dataset()
-    ds_merged = ds_ghi
-    ds_merged.rename({ghi_var: 'global_horizontal'}, inplace=True)
+    ds_merged = ds_ghi.rename({ghi_var: 'global_horizontal'})
 
     # Open diffuse_fraction file:
     try:
@@ -385,8 +384,7 @@ def _open_files(ghi_data: tuple, diffuse_data: tuple, temp_data: tuple):
         ds_diffuse = ds_diffuse_in[diffuse_var].to_dataset()
         if ds_ghi.dims != ds_diffuse.dims:
             raise ValueError('Dimension of diffuse fraciton file does not match radiation file')
-        ds_merged = xr.merge([ds_merged, ds_diffuse])
-        ds_merged.rename({diffuse_var: 'diffuse_fraction'}, inplace=True)
+        ds_merged = xr.merge([ds_merged, ds_diffuse]).rename({diffuse_var: 'diffuse_fraction'})
 
     except OSError:
         print('> No diffuse fraction file found -> will calculate with BRL-Model')
@@ -399,8 +397,7 @@ def _open_files(ghi_data: tuple, diffuse_data: tuple, temp_data: tuple):
             ds_temp = ds_temp - 273.15  # convert form kelvin to celsius
         if ds_ghi.dims != ds_temp.dims:
             raise ValueError('Dimension of temperature file does not match radiation file')
-        ds_merged = xr.merge([ds_merged, ds_temp])
-        ds_merged.rename({temp_var: 'temperature'}, inplace=True)
+        ds_merged = xr.merge([ds_merged, ds_temp]).rename({temp_var: 'temperature'})
 
     except OSError:
         print('> No temperature file found -> will assume 20°C default value')

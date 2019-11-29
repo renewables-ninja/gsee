@@ -68,7 +68,7 @@ def test_mod_time_dim():
     assert len(days) == 1
     assert days[0] == 1
     # assert np.array_equal(result.values, pd.date_range(start='2000-01-01', periods=20, freq='A').values)
-    compare = pd.DatetimeIndex(start='2000-01-01', periods=20, freq='AS')
+    compare = pd.date_range(start='2000-01-01', periods=20, freq='AS')
     for date in result:
         assert date in compare
 
@@ -80,7 +80,7 @@ def test_mod_time_dim():
     minutes = np.unique(result.map(lambda x: x.minute))
     assert len(minutes) == 1
     assert minutes[0] == 0
-    compare = pd.DatetimeIndex(start='2000-05-18', periods=20, freq='D')
+    compare = pd.date_range(start='2000-05-18', periods=20, freq='D')
     for date in result:
         assert date in compare
 
@@ -101,7 +101,7 @@ def test_mod_time_dim():
 def test_detect_frequency():
     for freq in ['A', 'M', 'D', 'H']:
         in_freq = 'detect'
-        da = xr.DataArray(np.random.rand(50), [('time', pd.DatetimeIndex(start='2000-01-01', periods=50, freq=freq))])
+        da = xr.DataArray(np.random.rand(50), [('time', pd.date_range(start='2000-01-01', periods=50, freq=freq))])
         ds = da.to_dataset(name='random')
         out_freq = interface._detect_frequency(ds, in_freq)
         assert out_freq == freq
@@ -110,7 +110,7 @@ def test_detect_frequency():
         assert out_freq == freq
 
     in_freq = 'S'
-    da = xr.DataArray(np.random.rand(50), [('time', pd.DatetimeIndex(start='2000-01-01', periods=50, freq='QS-DEC'))])
+    da = xr.DataArray(np.random.rand(50), [('time', pd.date_range(start='2000-01-01', periods=50, freq='QS-DEC'))])
     ds = da.to_dataset(name='random')
     out_freq = interface._detect_frequency(ds, in_freq)
     assert out_freq == 'S'

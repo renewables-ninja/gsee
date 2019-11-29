@@ -59,7 +59,7 @@ def add_kd_run_gsee(
     # Run PV-model
     for col in tmp_df_kd.columns:
         if col not in ['global_horizontal', 'diffuse_fraction', 'temperature']:
-            tmp_df_kd.drop([col], axis=1, inplace=True)
+            tmp_df_kd= tmp_df_kd.drop([col], axis=1)
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         pv_h = pv_model.run_model(data=tmp_df_kd, coords=coords, **params)
@@ -112,7 +112,7 @@ def resample_for_gsee(
 
     for col in df.columns:
         if col not in ['global_horizontal', 'diffuse_fraction', 'temperature']:
-            df.drop([col], axis=1, inplace=True)
+            df = df.drop([col], axis=1)
 
     df = df.replace([np.inf, -np.inf], 0)
 
@@ -382,10 +382,10 @@ def return_pv(pv: pd.Series, shr_mem: list, prog_mem: list, coords: tuple, i: in
 
     pv = pv.to_frame()
     pv.columns = ['pv']
-    pv.reset_index(inplace=True)
+    pv = pv.reset_index()
     pv['lat'] = coords[0]
     pv['lon'] = coords[1]
-    pv.set_index(['lon', 'lat', 'time'], inplace=True)
+    pv = pv.set_index(['lon', 'lat', 'time'])
     shr_mem[i] = pv.to_xarray()
     prog_mem.append(1)
     len_coord_list = prog_mem[0]

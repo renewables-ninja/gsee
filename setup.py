@@ -60,10 +60,10 @@ setup(
     install_requires=[
         "joblib >= 0.12",
         "numpy >= 1.15.0",
-        "pandas >= 0.23.4",
+        "pandas >= 0.25.3, < 0.26",
         "pyephem >= 3.7.6",
         "scipy >= 1.1.0",
-        "xarray >= 0.10.9",
+        "xarray >= 0.14.1, < 0.15",
         "pvlib >= 0.6.3",
     ],
     setup_requires=[
