@@ -1,6 +1,7 @@
 [![Master branch build status](https://img.shields.io/azure-devops/build/renewables-ninja/dcefb182-6481-4ca4-8f5e-75b022ab426d/1?style=flat-square)](https://dev.azure.com/renewables-ninja/gsee/_build?definitionId=1)
 [![Test coverage](https://img.shields.io/codecov/c/github/renewables-ninja/gsee?style=flat-square&token=1b25079ab156419b919462aaba0f469e)](https://codecov.io/gh/renewables-ninja/gsee)
 [![PyPI version](https://img.shields.io/pypi/v/gsee.svg?style=flat-square)](https://pypi.python.org/pypi/gsee)
+[![conda-forge version](https://img.shields.io/conda/vn/conda-forge/gsee.svg?style=flat-square)](https://anaconda.org/conda-forge/gsee)
 
 # GSEE: Global Solar Energy Estimator
 
@@ -19,13 +20,11 @@ Works only with Python 3. Required libraries:
 
 ## Installation
 
-Simply install with `pip`:
+The recommended way to install is through the [Anaconda Python distribution](https://www.continuum.io/downloads) and `conda-forge`:
 
-    pip install gsee
+    conda install -c conda-forge gsee
 
-The recommended way to install the required scientific libraries is to use the [Anaconda Python distribution](https://www.continuum.io/downloads).
-
-**Known issue**: If you do not already have `numpy` installed, you will get a compiler error when pip tries to build to `climatedata_interface` Cython extension.
+You can also install with `pip install gsee`, but if you do so, and do not already have `numpy` installed, you will get a compiler error when pip tries to build to `climatedata_interface` Cython extension.
 
 ## Functionality
 
