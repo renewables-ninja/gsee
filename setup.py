@@ -58,13 +58,15 @@ setup(
     ext_modules=ext_modules,
     zip_safe=False,
     install_requires=[
+        "dask >= 2.8",
+        "distributed >= 2.8
         "joblib >= 0.12",
         "numpy >= 1.15.0",
         "pandas >= 0.25.3, < 0.26",
+        "pvlib >= 0.6.3",
         "pyephem >= 3.7.6",
         "scipy >= 1.1.0",
         "xarray >= 0.14.1, < 0.15",
-        "pvlib >= 0.6.3",
     ],
     setup_requires=[
         "numpy >= 1.15.0",

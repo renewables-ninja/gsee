@@ -7,20 +7,9 @@
 
 `GSEE` is a solar energy simulation library designed for rapid calculations and ease of use. [Renewables.ninja](https://www.renewables.ninja/) uses `GSEE`.
 
-## Requirements
-
-Works only with Python 3. Required libraries:
-
-* [joblib](https://joblib.readthedocs.io/en/latest/)
-* [numpy](https://numpy.org/)
-* [pandas](https://pandas.pydata.org/)
-* [pyephem](https://pypi.org/project/ephem/)
-* [scipy](https://scipy.org/)
-* [xarray](https://xarray.pydata.org/)
-
 ## Installation
 
-The recommended way to install is through the [Anaconda Python distribution](https://www.continuum.io/downloads) and `conda-forge`:
+`GSEE` requires Python 3. The recommended way to install is through the [Anaconda Python distribution](https://www.continuum.io/downloads) and `conda-forge`:
 
     conda install -c conda-forge gsee
 

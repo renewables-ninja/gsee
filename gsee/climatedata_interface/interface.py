@@ -71,10 +71,8 @@ def run_interface_from_dataset(
 
     if pdfs_file is not None:
         if frequency in ['A', 'S', 'M']:
-            if pdfs_file == 'builtin':
-                pdfs = xr.open_dataset(util.return_pdf_path(), autoclose=True)
-            else:
-                pdfs = xr.open_dataset(pdfs_file, autoclose=True)
+            pdfs_path = util.return_pdf_path() if pdfs_file == 'builtin' else pdfs_file
+            pdfs = xr.open_dataset(pdfs_path)
             pdf_coords = list(product(pdfs['lat'].values, pdfs['lon'].values))
             tree = spatial.KDTree(pdf_coords)
             coord_list_nn = [pdf_coords[int(tree.query([x])[1])] for x in coord_list]
@@ -85,9 +83,10 @@ def run_interface_from_dataset(
             )
 
     if num_cores > 1:
+        from joblib import Parallel, delayed, wrap_non_picklable_objects
+        from joblib.parallel import get_active_backend
         print('Parallel mode: {} cores'.format(num_cores))
-        from joblib import Parallel, delayed
-        Parallel(n_jobs=num_cores)(delayed(resample_for_gsee)(
+        Parallel(n_jobs=num_cores)(delayed(wrap_non_picklable_objects(resample_for_gsee))(
             data.sel(lat=coords[0], lon=coords[1]), frequency, params,
             i, coords, shr_mem, prog_mem,
             None if pdfs_file is None else pdfs.sel(lat=coord_list_nn[i][0], lon=coord_list_nn[i][1])
@@ -185,15 +184,6 @@ def run_interface(
             raise ValueError(
                 'Parsing of "cmip5" time dimension failed. Set timeformat to None, or check your data.'
             )
-        # Clean up non-standard time attributes.
-        # Why? When xarray encounters time atributes it cannot parse, it
-        # persists them, and later raises an exception when trying to save
-        # results back to NetCDF and attempting to serialise our parsed time
-        # dimension back to units/calendar attributes that it expects
-        # not to already exist
-        for attr in ['units', 'calendar']:
-            if attr in ds_merged.time.attrs:
-                del ds_merged.time.attrs[attr]
 
     # Check whether the time dimension was recognised correctly and interpreted as time by dataset
     if not type(ds_merged['time'].values[0]) is np.datetime64:
@@ -214,9 +204,20 @@ def run_interface(
             num_cores=num_cores
         )
 
-        for var in ds_in.data_vars:
-            if var == 'time_bnds':
-                ds_pv[var] = ds_in[var]
+        ##
+        # Re-attach time_bnds and clean up time dimension before saving back to disk
+        ##
+        # When xarray encounters time atributes it cannot parse, it
+        # persists them, and later raises an exception when trying to save
+        # results back to NetCDF and attempting to serialise our parsed time
+        # dimension back to units/calendar attributes that it expects
+        # not to already exist
+        if 'time_bnds' in ds_in.data_vars:
+            ds_pv['time_bnds'] = ds_in['time_bnds']
+
+        for attr in ['units', 'calendar']:
+            if attr in ds_pv.time.attrs:
+                del ds_pv.time.attrs[attr]
 
         # Save results with zlib compression
         encoding_params = {'zlib': True, 'complevel': 4}
@@ -370,7 +371,7 @@ def _open_files(ghi_data: tuple, diffuse_data: tuple, temp_data: tuple):
     temp_file, temp_var = temp_data
 
     try:
-        ds_ghi_in = xr.open_dataset(ghi_file, autoclose=True)
+        ds_ghi_in = xr.open_dataset(ghi_file)
     except Exception:
         raise FileNotFoundError('Radiation file not found')
 
@@ -380,7 +381,7 @@ def _open_files(ghi_data: tuple, diffuse_data: tuple, temp_data: tuple):
 
     # Open diffuse_fraction file:
     try:
-        ds_diffuse_in = xr.open_dataset(diffuse_file, autoclose=True)
+        ds_diffuse_in = xr.open_dataset(diffuse_file)
         ds_diffuse = ds_diffuse_in[diffuse_var].to_dataset()
         if ds_ghi.dims != ds_diffuse.dims:
             raise ValueError('Dimension of diffuse fraciton file does not match radiation file')
@@ -390,7 +391,7 @@ def _open_files(ghi_data: tuple, diffuse_data: tuple, temp_data: tuple):
         print('> No diffuse fraction file found -> will calculate with BRL-Model')
     # Open temperature file:
     try:
-        ds_temp_in = xr.open_dataset(temp_file, autoclose=True)
+        ds_temp_in = xr.open_dataset(temp_file)
         ds_temp = ds_temp_in[temp_var].to_dataset()
         if ds_temp[temp_var].mean().values > 200:
             print('> Average temperature above 200° detected --> will convert to °C')
