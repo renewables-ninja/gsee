@@ -59,7 +59,7 @@ setup(
     zip_safe=False,
     install_requires=[
         "dask >= 2.8",
-        "distributed >= 2.8
+        "distributed >= 2.8",
         "joblib >= 0.12",
         "numpy >= 1.15.0",
         "pandas >= 0.25.3, < 0.26",
