@@ -204,17 +204,23 @@ def run_interface(
             num_cores=num_cores
         )
 
-        ##
-        # Re-attach time_bnds and clean up time dimension before saving back to disk
-        ##
+        # Kill leftover coordinates that no variable is indexed over
+        coords_to_kill = [i for i in ds_pv.coords if i not in ds_pv.dims]
+        for coord in coords_to_kill:
+            del ds_pv[coord]
+
+        # Carry over CF attributes from the remaining dimensions
+        for attr in ['standard_name', 'long_name', 'units', 'axis']:
+            for dim in ds_pv.dims:
+                if attr in ds_in[dim].attrs and attr not in ds_pv[dim].attrs:
+                    ds_pv[dim].attrs[attr] = ds_in[dim].attrs[attr]
+
+        # Clean up time dimension before saving back to disk.
         # When xarray encounters time atributes it cannot parse, it
         # persists them, and later raises an exception when trying to save
         # results back to NetCDF and attempting to serialise our parsed time
         # dimension back to units/calendar attributes that it expects
-        # not to already exist
-        if 'time_bnds' in ds_in.data_vars:
-            ds_pv['time_bnds'] = ds_in['time_bnds']
-
+        # not to already exist.
         for attr in ['units', 'calendar']:
             if attr in ds_pv.time.attrs:
                 del ds_pv.time.attrs[attr]
