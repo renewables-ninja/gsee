@@ -1,0 +1,24 @@
+site_name: GSEE
+site_description: Global Solar Energy Estimator
+site_url: https://gsee.readthedocs.io/
+
+theme:
+    name: material
+    logo: ninja.png
+    favicon: favicon.ico
+
+repo_name: renewables-ninja/gsee
+repo_url: https://github.com/renewables-ninja/gsee/
+edit_uri: ""
+
+nav:
+    - Introduction: index.md
+    - Climate Data Interface: climatedata-interface.md
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - mkautodoc
+
+extra_css:
+  - 'stylesheets/extra.css'
