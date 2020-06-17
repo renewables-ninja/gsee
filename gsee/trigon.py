@@ -100,33 +100,53 @@ def sun_angles(datetime_index, coords, rise_set_times=None):
 
     for index, item in enumerate(datetime_index):
         obs.date = item
-        # rise/set times are indexed by day, so need to adjust lookup
-        rise_time, set_time = rise_set_times.loc[item.date()]
 
-        # Set angles, sun altitude and duration based on hour of day:
-        if rise_time is not None and item.hour == rise_time.hour:
-            # Special case for sunrise hour
-            duration = 60 - rise_time.minute - (rise_time.second / 60.0)
-            obs.date = rise_time + datetime.timedelta(minutes=duration / 2)
-            sun_alt, sun_azimuth = _sun_alt_azim(sun, obs)
-        elif set_time is not None and item.hour == set_time.hour:
-            # Special case for sunset hour
-            duration = set_time.minute + set_time.second / 60.0
-            obs.date = item + datetime.timedelta(minutes=duration / 2)
-            sun_alt, sun_azimuth = _sun_alt_azim(sun, obs)
-        else:
-            # All other hours
-            duration = 60
-            obs.date = item + datetime.timedelta(minutes=30)
-            sun_alt, sun_azimuth = _sun_alt_azim(sun, obs)
-            if sun_alt < 0:  # If sun is below horizon
-                sun_alt, sun_azimuth, duration = 0, 0, 0
+        # todo it might make sense to keep the elif and else cases for instantaneous values
+        if 1 == 2:
+            # rise/set times are indexed by day, so need to adjust lookup
+            rise_time, set_time = rise_set_times.loc[item.date()]
+            # Set angles, sun altitude and duration based on hour of day:
+            if rise_time is not None and item.hour == rise_time.hour:
+                # Special case for sunrise hour
+                duration = 60 - rise_time.minute - (rise_time.second / 60.0)
+                obs.date = rise_time + datetime.timedelta(minutes=duration / 2)
+                sun_alt, sun_azimuth = _sun_alt_azim(sun, obs)
+            elif set_time is not None and item.hour == set_time.hour:
+                # Special case for sunset hour
+                duration = set_time.minute + set_time.second / 60.0
+                obs.date = item + datetime.timedelta(minutes=duration / 2)
+                sun_alt, sun_azimuth = _sun_alt_azim(sun, obs)
+            else:
+                # All other hours
+                duration = 60
+                obs.date = item + datetime.timedelta(minutes=30)
+                sun_alt, sun_azimuth = _sun_alt_azim(sun, obs)
+                if sun_alt < 0:  # If sun is below horizon
+                    sun_alt, sun_azimuth, duration = 0, 0, 0
+        # this case corresponds to cumulative radiation values (e.g., from a reanalysis or climate model)
+        # it assumes that input radiation data is a centered running mean
+        if 2 == 2:
+            timestep = datetime_index[1] - datetime_index[0]  # benefit: independent of input resolution
+            tmp_one_over_cos = []
+            # sub-resolution evolution of angles (1/cos(h) gets really large around sunset!)
+            for time_offset in np.linspace(-.5, .5, 20) * timestep:  # mimic sub-resolution evolution of angles
+                obs.date = item + time_offset
+                sun_alt, sun_azimuth = _sun_alt_azim(sun, obs)
+                tmp_zenith = np.pi / 2 - sun_alt
+                # assume that dni = 0 if sun very low (here zenith > 89/90 pi/2)
+                if tmp_zenith > 89 / 90 * np.pi / 2:
+                    tmp_one_over_cos.append(0)
+                else:
+                    tmp_one_over_cos.append(1 / np.cos(tmp_zenith))
+            one_over_cos_zenith.append(np.mean(tmp_one_over_cos))
+
 
         alts.append(sun_alt)
         azims.append(sun_azimuth)
         durations.append(duration)
     df = pd.DataFrame({'sun_alt': alts, 'sun_azimuth': azims,
-                       'duration': durations},
+                       'duration': durations,
+                       'timestepmean_one_over_cos_sun_zenith': one_over_cos_zenith},
                       index=datetime_index)
     df['sun_zenith'] = (np.pi / 2) - df.sun_alt
     # Sun altitude considered zero if slightly below horizon
@@ -234,7 +254,11 @@ def aperture_irradiance(direct, diffuse, coords,
         sunrise_set_times = sun_rise_set_times(direct.index, coords)
         angles = sun_angles(direct.index, coords, sunrise_set_times)
     # 2. Calculate direct normal irradiance
-    dni = (direct * (angles['duration'] / 60)) / np.cos(angles['sun_zenith'])
+    # todo this is the same case as in sun_angles. It might make sense to keep it for instantaneous values
+    if 1 == 2:
+        dni = (direct * (angles['duration'] / 60)) / np.cos(angles['sun_zenith'])
+    else:
+        dni = direct * angles['timestepmean_one_over_cos_sun_zenith']
     if dni_only:
         return dni
     # 3. Calculate appropriate aperture incidence angle
