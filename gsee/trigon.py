@@ -96,6 +96,7 @@ def sun_angles(datetime_index, coords, rise_set_times=None):
     # Calculate hourly altitute, azimuth, and sunshine
     alts = []
     azims = []
+    one_over_cos_zenith = []
     durations = []
 
     for index, item in enumerate(datetime_index):
@@ -139,7 +140,7 @@ def sun_angles(datetime_index, coords, rise_set_times=None):
                 else:
                     tmp_one_over_cos.append(1 / np.cos(tmp_zenith))
             one_over_cos_zenith.append(np.mean(tmp_one_over_cos))
-
+            duration = None  # duration has no meaning in this case
 
         alts.append(sun_alt)
         azims.append(sun_azimuth)
