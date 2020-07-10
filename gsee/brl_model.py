@@ -26,7 +26,7 @@ def _solartime(observer, sun):
     """Return solar time for given observer and sun"""
     # sidereal time == ra (right ascension) is the highest point (noon)
     hour_angle = observer.sidereal_time() - sun.ra
-    return ephem.hours(hour_angle + ephem.hours('12:00')).norm  # norm for 24h
+    return ephem.hours(hour_angle + ephem.hours("12:00")).norm  # norm for 24h
 
 
 def _get_psi_func(sunrise, sunset):
@@ -70,16 +70,19 @@ def _get_psi_func(sunrise, sunset):
         else:
             psi = 0
         return psi
+
     return f
 
 
 # Updated params from Lauret et al. (2013)
-DEFAULT_PARAMS = {'a0': -5.32,
-                  'a1': 7.28,
-                  'b1': -0.03,
-                  'b2': -0.0047,
-                  'b3': 1.72,
-                  'b4': 1.08}
+DEFAULT_PARAMS = {
+    "a0": -5.32,
+    "a1": 7.28,
+    "b1": -0.03,
+    "b2": -0.0047,
+    "b3": 1.72,
+    "b4": 1.08,
+}
 
 
 # Parameters from Ridley et al. (2010)
@@ -115,9 +118,14 @@ def _daily_diffuse(obs, ks, sunrise, sunset, p=DEFAULT_PARAMS):
             d = np.nan
         else:
             ast = _solartime(obs, sun)
-            pwr = (p['a0'] + p['a1'] * ks[hour]
-                   + p['b1'] * ast + p['b2'] * alpha
-                   + p['b3'] * k_day + p['b4'] * psi(hour, ks))
+            pwr = (
+                p["a0"]
+                + p["a1"] * ks[hour]
+                + p["b1"] * ast
+                + p["b2"] * alpha
+                + p["b3"] * k_day
+                + p["b4"] * psi(hour, ks)
+            )
             d = 1 / (1 + math.e ** pwr)
         values.append(d)
         # Increase obs.date by one hour for the next iteration
@@ -153,7 +161,7 @@ def run(hourly_clearness, coords, rise_set_times=None):
     diffuse_fractions = []
     for i in range(0, len(hourly_clearness), 24):
         # for entry in list in hourly clearness indices:
-        ks = hourly_clearness.iloc[i:i+24].tolist()
+        ks = hourly_clearness.iloc[i : i + 24].tolist()
         obs.date = hourly_clearness.index[i]
         # These are indexed by day, so need to scale the index
         sunrise, sunset = rise_set_times[int(i / 24)]

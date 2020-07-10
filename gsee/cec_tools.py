@@ -12,9 +12,7 @@ def get_efficiency(irradiance, cell_temperature, module_params):
 
     """
     params = pvlib.pvsystem.calcparams_desoto(
-        effective_irradiance=irradiance,
-        temp_cell=cell_temperature,
-        **module_params
+        effective_irradiance=irradiance, temp_cell=cell_temperature, **module_params
     )
 
     # Ensure that the shunt resistance is not infinite
@@ -23,7 +21,7 @@ def get_efficiency(irradiance, cell_temperature, module_params):
     # assert params[3] != math.inf
 
     dc = pvlib.pvsystem.singlediode(*params)
-    efficiency = dc['p_mp'] / irradiance
+    efficiency = dc["p_mp"] / irradiance
     return efficiency
 
 

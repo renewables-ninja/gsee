@@ -56,8 +56,7 @@ def sun_rise_set_times(datetime_index, coords):
     )
 
     return pd.Series(
-        [_get_rise_and_set_time(i, sun, obs) for i in dtindex],
-        index=dtindex
+        [_get_rise_and_set_time(i, sun, obs) for i in dtindex], index=dtindex
     )
 
 
@@ -125,20 +124,22 @@ def sun_angles(datetime_index, coords, rise_set_times=None):
         alts.append(sun_alt)
         azims.append(sun_azimuth)
         durations.append(duration)
-    df = pd.DataFrame({'sun_alt': alts, 'sun_azimuth': azims,
-                       'duration': durations},
-                      index=datetime_index)
-    df['sun_zenith'] = (np.pi / 2) - df.sun_alt
+    df = pd.DataFrame(
+        {"sun_alt": alts, "sun_azimuth": azims, "duration": durations},
+        index=datetime_index,
+    )
+    df["sun_zenith"] = (np.pi / 2) - df.sun_alt
     # Sun altitude considered zero if slightly below horizon
-    df['sun_alt'] = df['sun_alt'].clip(lower=0)
+    df["sun_alt"] = df["sun_alt"].clip(lower=0)
     return df
 
 
 def _incidence_fixed(sun_alt, tilt, azimuth, sun_azimuth):
     """Returns incidence angle for a fixed panel"""
-    return np.arccos(np.sin(sun_alt) * np.cos(tilt)
-                     + np.cos(sun_alt) * np.sin(tilt)
-                     * np.cos(azimuth - sun_azimuth))
+    return np.arccos(
+        np.sin(sun_alt) * np.cos(tilt)
+        + np.cos(sun_alt) * np.sin(tilt) * np.cos(azimuth - sun_azimuth)
+    )
 
 
 def _incidence_single_tracking(sun_alt, tilt, azimuth, sun_azimuth):
@@ -154,17 +155,22 @@ def _incidence_single_tracking(sun_alt, tilt, azimuth, sun_azimuth):
 
     """
     if tilt == 0:
-        return np.arccos(np.sqrt(
-            1 - np.cos(sun_alt) ** 2
-            * np.cos(sun_azimuth - azimuth) ** 2
-        ))
+        return np.arccos(
+            np.sqrt(1 - np.cos(sun_alt) ** 2 * np.cos(sun_azimuth - azimuth) ** 2)
+        )
     else:
-        return np.arccos(np.sqrt(
-            1 - (
-                np.cos(sun_alt + tilt)
-                - np.cos(tilt) * np.cos(sun_alt) * (1 - np.cos(sun_azimuth - azimuth))
-            ) ** 2
-        ))
+        return np.arccos(
+            np.sqrt(
+                1
+                - (
+                    np.cos(sun_alt + tilt)
+                    - np.cos(tilt)
+                    * np.cos(sun_alt)
+                    * (1 - np.cos(sun_azimuth - azimuth))
+                )
+                ** 2
+            )
+        )
 
 
 def _tilt_single_tracking(sun_alt, tilt, azimuth, sun_azimuth):
@@ -180,22 +186,28 @@ def _tilt_single_tracking(sun_alt, tilt, azimuth, sun_azimuth):
 
     """
     if tilt == 0:
-        return np.arctan(
-            np.sin(sun_azimuth - azimuth) / np.tan(sun_alt)
-        )
+        return np.arctan(np.sin(sun_azimuth - azimuth) / np.tan(sun_alt))
     else:
         return np.arctan(
-            (np.cos(sun_alt) * np.sin(sun_azimuth - azimuth)) /
-            (
-                np.sin(sun_alt - tilt) +
-                np.sin(tilt) * np.cos(sun_alt) * (1 - np.cos(sun_azimuth - azimuth))
+            (np.cos(sun_alt) * np.sin(sun_azimuth - azimuth))
+            / (
+                np.sin(sun_alt - tilt)
+                + np.sin(tilt) * np.cos(sun_alt) * (1 - np.cos(sun_azimuth - azimuth))
             )
         )
 
 
-def aperture_irradiance(direct, diffuse, coords,
-                        tilt=0, azimuth=0, tracking=0, albedo=0.3,
-                        dni_only=False, angles=None):
+def aperture_irradiance(
+    direct,
+    diffuse,
+    coords,
+    tilt=0,
+    azimuth=0,
+    tracking=0,
+    albedo=0.3,
+    dni_only=False,
+    angles=None,
+):
     """
     Parameters
     ----------
@@ -234,34 +246,37 @@ def aperture_irradiance(direct, diffuse, coords,
         sunrise_set_times = sun_rise_set_times(direct.index, coords)
         angles = sun_angles(direct.index, coords, sunrise_set_times)
     # 2. Calculate direct normal irradiance
-    dni = (direct * (angles['duration'] / 60)) / np.cos(angles['sun_zenith'])
+    dni = (direct * (angles["duration"] / 60)) / np.cos(angles["sun_zenith"])
     if dni_only:
         return dni
     # 3. Calculate appropriate aperture incidence angle
     if tracking == 0:
-        incidence = _incidence_fixed(angles['sun_alt'], tilt, azimuth,
-                                     angles['sun_azimuth'])
+        incidence = _incidence_fixed(
+            angles["sun_alt"], tilt, azimuth, angles["sun_azimuth"]
+        )
         panel_tilt = tilt
     elif tracking == 1:
         # 1-axis tracking with horizontal or tilted tracking axis
-        incidence = _incidence_single_tracking(angles['sun_alt'],
-                                               tilt, azimuth,
-                                               angles['sun_azimuth'])
-        panel_tilt = _tilt_single_tracking(angles['sun_alt'], tilt, azimuth,
-                                           angles['sun_azimuth'])
+        incidence = _incidence_single_tracking(
+            angles["sun_alt"], tilt, azimuth, angles["sun_azimuth"]
+        )
+        panel_tilt = _tilt_single_tracking(
+            angles["sun_alt"], tilt, azimuth, angles["sun_azimuth"]
+        )
     elif tracking == 2:
         # 2-axis tracking means incidence angle is zero
         # Assuming azimuth/elevation tracking for tilt/azimuth angles
         incidence = 0
-        panel_tilt = angles['sun_zenith']
-        azimuth = angles['sun_azimuth']
+        panel_tilt = angles["sun_zenith"]
+        azimuth = angles["sun_azimuth"]
     else:
-        raise ValueError('Invalid setting for tracking: {}'.format(tracking))
+        raise ValueError("Invalid setting for tracking: {}".format(tracking))
     # 4. Compute direct and diffuse irradiance on plane
     # Clipping ensures that very low panel to sun altitude angles do not
     # result in negative direct irradiance (reflection)
     plane_direct = (dni * np.cos(incidence)).fillna(0).clip(lower=0)
-    plane_diffuse = (diffuse * ((1 + np.cos(panel_tilt)) / 2)
-                     + albedo * (direct + diffuse)
-                     * ((1 - np.cos(panel_tilt)) / 2)).fillna(0)
-    return pd.DataFrame({'direct': plane_direct, 'diffuse': plane_diffuse})
+    plane_diffuse = (
+        diffuse * ((1 + np.cos(panel_tilt)) / 2)
+        + albedo * (direct + diffuse) * ((1 - np.cos(panel_tilt)) / 2)
+    ).fillna(0)
+    return pd.DataFrame({"direct": plane_direct, "diffuse": plane_diffuse})
