@@ -236,6 +236,7 @@ def aperture_irradiance(
     albedo=0.3,
     dni_only=False,
     angles=None,
+    irradiance_type="instantaneous",
 ):
     """
     Parameters
@@ -264,8 +265,13 @@ def aperture_irradiance(
         tilt, azimuth, tracking and albedo arguments).
     angles : pandas.DataFrame, optional
         Solar angles. If default (None), they are computed automatically.
+    irradiance_type : str, default "instantaneous"
+        Choices: "instantaneous" or "cumulative"
+        Specify whether the irradiance values in the input data are instantaneous or cumulative. This affects the accuracy of how sun angles and durations are calculated.
 
     """
+    assert irradiance_type in ["instantaneous", "cumulative"]
+
     # 0. Correct azimuth if we're on southern hemisphere, so that 3.14
     # points north instead of south
     if coords[0] < 0:
