@@ -72,14 +72,17 @@ class PVPanel(object):
 
         """
         if tamb is not None:
-            assert irradiance.index.equals(tamb.index), 'Data indices must match'
-        return (irradiance * self.panel_aperture
-                * self.panel_relative_efficiency(irradiance, tamb)
-                * self.panel_ref_efficiency)
+            assert irradiance.index.equals(tamb.index), "Data indices must match"
+        return (
+            irradiance
+            * self.panel_aperture
+            * self.panel_relative_efficiency(irradiance, tamb)
+            * self.panel_ref_efficiency
+        )
 
     def panel_relative_efficiency(self, irradiance, tamb):
         raise NotImplementedError(
-            'Must subclass and specify relative efficiency function'
+            "Must subclass and specify relative efficiency function"
         )
 
 
@@ -92,10 +95,11 @@ class SingleDiodePanel(PVPanel):
         Reference wind speed (m/2).
 
     """
+
     def __init__(self, module_params, ref_windspeed=5, **kwargs):
         super().__init__(**kwargs)
         # Some very simple checking of inputs
-        for k in ['alpha_sc', 'a_ref', 'I_L_ref', 'I_o_ref', 'R_sh_ref', 'R_s']:
+        for k in ["alpha_sc", "a_ref", "I_L_ref", "I_o_ref", "R_sh_ref", "R_s"]:
             assert k in module_params
         self.module_params = module_params
         self.ref_windspeed = ref_windspeed
@@ -110,13 +114,12 @@ class SingleDiodePanel(PVPanel):
         """
         if windspeed is None:
             windspeed = self.ref_windspeed
-        module_temperature = pvlib.pvsystem.sapm_celltemp(
-            irradiance, windspeed, tamb
-        )['temp_module']
+        module_temperature = pvlib.pvsystem.sapm_celltemp(irradiance, windspeed, tamb)[
+            "temp_module"
+        ]
 
         efficiency = cec_tools.relative_eff(
-            irradiance, module_temperature,
-            self.module_params
+            irradiance, module_temperature, self.module_params
         )
 
         return efficiency
@@ -133,6 +136,7 @@ class HuldPanel(PVPanel):
             0.05   # Building-integrated module
 
     """
+
     def __init__(self, c_temp_amb=1, c_temp_irrad=0.035, **kwargs):
         super().__init__(**kwargs)
         # Panel temperature estimation
@@ -161,13 +165,12 @@ class HuldPanel(PVPanel):
         # NB: np.log without base implies base e or ln
         # Catching warnings to suppress "RuntimeWarning: invalid value encountered in log"
         with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
+            warnings.simplefilter("ignore")
             eff = (
-                1 + self.k_1 * np.log(G_)
+                1
+                + self.k_1 * np.log(G_)
                 + self.k_2 * (np.log(G_)) ** 2
-                + T_ * (self.k_3
-                        + self.k_4 * np.log(G_)
-                        + self.k_5 * (np.log(G_)) ** 2)
+                + T_ * (self.k_3 + self.k_4 * np.log(G_) + self.k_5 * (np.log(G_)) ** 2)
                 + self.k_6 * (T_ ** 2)
             )
         eff.fillna(0, inplace=True)  # NaNs in case that G_ was <= 0
@@ -177,6 +180,7 @@ class HuldPanel(PVPanel):
 
 class HuldCSiPanel(HuldPanel):
     """c-Si technology, based on data from {1}"""
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.k_1 = -0.017162
@@ -189,6 +193,7 @@ class HuldCSiPanel(HuldPanel):
 
 class HuldCISPanel(HuldPanel):
     """CIS technology, based on data from {1}"""
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.k_1 = -0.005521
@@ -201,6 +206,7 @@ class HuldCISPanel(HuldPanel):
 
 class HuldCdTePanel(HuldPanel):
     """CdTe technology, based on data from {1}"""
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.k_1 = -0.103251
@@ -212,9 +218,9 @@ class HuldCdTePanel(HuldPanel):
 
 
 _PANEL_TYPES = {
-    'csi': HuldCSiPanel,
-    'cis': HuldCISPanel,
-    'cdte': HuldCdTePanel,
+    "csi": HuldCSiPanel,
+    "cis": HuldCISPanel,
+    "cdte": HuldCdTePanel,
 }
 
 
@@ -226,6 +232,7 @@ class Inverter(object):
     is 1.0, so that AC and DC nameplate capacities are equal.
 
     """
+
     def __init__(self, ac_capacity, eff_ref=0.9637, eff_nom=1.0):
         super().__init__()
         self.ac_capacity = ac_capacity
@@ -254,10 +261,20 @@ class Inverter(object):
 
 
 def run_model(
-        data, coords, tilt, azim, tracking, capacity,
-        inverter_capacity=None, use_inverter=True,
-        technology='csi', system_loss=0.10, angles=None,
-        include_raw_data=False, **kwargs):
+    data,
+    coords,
+    tilt,
+    azim,
+    tracking,
+    capacity,
+    inverter_capacity=None,
+    use_inverter=True,
+    technology="csi",
+    system_loss=0.10,
+    angles=None,
+    include_raw_data=False,
+    **kwargs
+):
     """
     Run PV plant model.
 
@@ -300,23 +317,27 @@ def run_model(
 
     """
     if (system_loss < 0) or (system_loss > 1):
-        raise ValueError('system_loss must be >=0 and <=1')
+        raise ValueError("system_loss must be >=0 and <=1")
 
     # Process data
     dir_horiz = data.global_horizontal * (1 - data.diffuse_fraction)
     diff_horiz = data.global_horizontal * data.diffuse_fraction
 
     # NB: aperture_irradiance expects azim/tilt in radians!
-    irrad = trigon.aperture_irradiance(dir_horiz, diff_horiz, coords,
-                                       tracking=tracking,
-                                       azimuth=math.radians(azim),
-                                       tilt=math.radians(tilt),
-                                       angles=angles)
+    irrad = trigon.aperture_irradiance(
+        dir_horiz,
+        diff_horiz,
+        coords,
+        tracking=tracking,
+        azimuth=math.radians(azim),
+        tilt=math.radians(tilt),
+        angles=angles,
+    )
     datetimes = irrad.index
 
     # Temperature, if it was given
-    if 'temperature' in data.columns:
-        tamb = data['temperature']
+    if "temperature" in data.columns:
+        tamb = data["temperature"]
     else:
         tamb = pd.Series(R_TAMB, index=datetimes)
 
@@ -331,7 +352,8 @@ def run_model(
     panel = panel_class(
         panel_aperture=capacity * area_per_capacity,
         panel_ref_efficiency=panel_efficiency,
-        **kwargs)
+        **kwargs
+    )
 
     # Run the panel model and return output
     irradiance = irrad.direct + irrad.diffuse
@@ -349,12 +371,14 @@ def run_model(
         ac_out_final = dc_out * (1 - system_loss)
 
     if include_raw_data:
-        return pd.DataFrame.from_dict({
-            'output': ac_out_final,
-            'direct': irrad.direct,
-            'diffuse': irrad.diffuse,
-            'temperature': tamb,
-        })
+        return pd.DataFrame.from_dict(
+            {
+                "output": ac_out_final,
+                "direct": irrad.direct,
+                "diffuse": irrad.diffuse,
+                "temperature": tamb,
+            }
+        )
     else:
         return ac_out_final
 
