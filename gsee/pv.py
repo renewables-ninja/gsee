@@ -312,6 +312,7 @@ def run_model(
     irradiance_type : str, default "instantaneous"
         Choices: "instantaneous" or "cumulative"
         Specify whether the irradiance values in the input data are instantaneous or cumulative. This affects the accuracy of how sun angles and durations are calculated.
+        Cumulative values are treated as centered means (e.g., hourly data at 3:30 corresponds to the mean from 3:00 to 4:00).
     kwargs : additional kwargs passed on the model constructor
 
     Returns

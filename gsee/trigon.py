@@ -60,7 +60,9 @@ def sun_rise_set_times(datetime_index, coords):
     )
 
 
-def sun_angles(datetime_index, coords, rise_set_times=None):
+def sun_angles(
+    datetime_index, coords, rise_set_times=None, irradiance_type="instantaneous"
+):
     """
     Calculates sun angles. Returns a dataframe containing `sun_alt`,
     `sun_zenith`, `sun_azimuth` and `duration` over the passed datetime index.
@@ -75,7 +77,10 @@ def sun_angles(datetime_index, coords, rise_set_times=None):
     rise_set_times : list, default None
         List of (sunrise, sunset) time tuples, if not passed, is computed
         here.
-
+    irradiance_type : str, default "instantaneous"
+        Choices: "instantaneous" or "cumulative"
+        Specify whether the irradiance values in the input data are instantaneous or cumulative. This affects the accuracy of how sun angles and durations are calculated.
+        Cumulative values are treated as centered means (e.g., hourly data at 3:30 corresponds to the mean from 3:00 to 4:00).
     """
 
     def _sun_alt_azim(sun, obs):
@@ -101,8 +106,7 @@ def sun_angles(datetime_index, coords, rise_set_times=None):
     for index, item in enumerate(datetime_index):
         obs.date = item
 
-        # todo it might make sense to keep the elif and else cases for instantaneous values
-        if 1 == 2:
+        if irradiance_type == "instantaneous":
             # rise/set times are indexed by day, so need to adjust lookup
             rise_time, set_time = rise_set_times.loc[item.date()]
             # Set angles, sun altitude and duration based on hour of day:
@@ -123,9 +127,8 @@ def sun_angles(datetime_index, coords, rise_set_times=None):
                 sun_alt, sun_azimuth = _sun_alt_azim(sun, obs)
                 if sun_alt < 0:  # If sun is below horizon
                     sun_alt, sun_azimuth, duration = 0, 0, 0
-        # this case corresponds to cumulative radiation values (e.g., from a reanalysis or climate model)
         # it assumes that input radiation data is a centered running mean
-        if 2 == 2:
+        elif irradiance_type == "cumulative":
             timestep = (
                 datetime_index[1] - datetime_index[0]
             )  # benefit: independent of input resolution
@@ -268,6 +271,7 @@ def aperture_irradiance(
     irradiance_type : str, default "instantaneous"
         Choices: "instantaneous" or "cumulative"
         Specify whether the irradiance values in the input data are instantaneous or cumulative. This affects the accuracy of how sun angles and durations are calculated.
+        Cumulative values are treated as centered means (e.g., hourly data at 3:30 corresponds to the mean from 3:00 to 4:00).
 
     """
     assert irradiance_type in ["instantaneous", "cumulative"]
@@ -279,10 +283,9 @@ def aperture_irradiance(
     # 1. Calculate solar angles
     if angles is None:
         sunrise_set_times = sun_rise_set_times(direct.index, coords)
-        angles = sun_angles(direct.index, coords, sunrise_set_times)
+        angles = sun_angles(direct.index, coords, sunrise_set_times, irradiance_type)
     # 2. Calculate direct normal irradiance
-    # todo this is the same case as in sun_angles. It might make sense to keep it for instantaneous values
-    if 1 == 2:
+    if irradiance_type == "instantaneous":
         dni = (direct * (angles["duration"] / 60)) / np.cos(angles["sun_zenith"])
     else:
         dni = direct * angles["timestepmean_one_over_cos_sun_zenith"]
