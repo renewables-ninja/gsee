@@ -61,7 +61,11 @@ def sun_rise_set_times(datetime_index, coords):
 
 
 def sun_angles(
-    datetime_index, coords, rise_set_times=None, irradiance_type="instantaneous"
+    datetime_index,
+    coords,
+    rise_set_times=None,
+    irradiance_type="instantaneous",
+    subres_steps=None,
 ):
     """
     Calculates sun angles. Returns a dataframe containing `sun_alt`,
@@ -81,6 +85,10 @@ def sun_angles(
         Choices: "instantaneous" or "cumulative"
         Specify whether the irradiance values in the input data are instantaneous or cumulative. This affects the accuracy of how sun angles and durations are calculated.
         Cumulative values are treated as centered means (e.g., hourly data at 3:30 corresponds to the mean from 3:00 to 4:00).
+    subres_steps : None or int, default None
+        If given and irradiance_type is cumulative, this parameter controls the number of subresolution time steps per input data time step.
+        Example: If input temporal resolution is 1 hour and subres_steps = 2, geometry is calculated every 30 Minutes
+        If not given and irradiance_type is cumulative, subres_steps are chosen such that geometry is calculated every 15 Minutes.
     """
 
     def _sun_alt_azim(sun, obs):
@@ -127,18 +135,24 @@ def sun_angles(
                 sun_alt, sun_azimuth = _sun_alt_azim(sun, obs)
                 if sun_alt < 0:  # If sun is below horizon
                     sun_alt, sun_azimuth, duration = 0, 0, 0
+            durations.append(duration)
+            alts.append(sun_alt)
         # it assumes that input radiation data is a centered running mean
         elif irradiance_type == "cumulative":
+            # sun azimuth calculated at center
+            sun_azimuth = _sun_alt_azim(sun, obs)[1]
             timestep = (
                 datetime_index[1] - datetime_index[0]
             )  # benefit: independent of input resolution
             tmp_one_over_cos = []
             # sub-resolution evolution of angles (1/cos(h) gets really large around sunset!)
+            if not subres_steps:
+                subres_steps = int(timestep / pd.Timedelta("0 days 00:15:00"))
             for time_offset in (
-                np.linspace(-0.5, 0.5, 20) * timestep
+                np.linspace(-0.5, 0.5, subres_steps) * timestep
             ):  # mimic sub-resolution evolution of angles
                 obs.date = item + time_offset
-                sun_alt, sun_azimuth = _sun_alt_azim(sun, obs)
+                sun_alt = _sun_alt_azim(sun, obs)[0]
                 tmp_zenith = np.pi / 2 - sun_alt
                 # assume that dni = 0 if sun very low (here zenith > 89/90 pi/2)
                 if tmp_zenith > 89 / 90 * np.pi / 2:
@@ -146,23 +160,28 @@ def sun_angles(
                 else:
                     tmp_one_over_cos.append(1 / np.cos(tmp_zenith))
             one_over_cos_zenith.append(np.mean(tmp_one_over_cos))
-            duration = None  # duration has no meaning in this case
+            if np.mean(tmp_one_over_cos) == 0:
+                sun_azimuth = 0
 
-        alts.append(sun_alt)
         azims.append(sun_azimuth)
-        durations.append(duration)
-    df = pd.DataFrame(
-        {
-            "sun_alt": alts,
-            "sun_azimuth": azims,
-            "duration": durations,
-            "timestepmean_one_over_cos_sun_zenith": one_over_cos_zenith,
-        },
-        index=datetime_index,
-    )
-    df["sun_zenith"] = (np.pi / 2) - df.sun_alt
-    # Sun altitude considered zero if slightly below horizon
-    df["sun_alt"] = df["sun_alt"].clip(lower=0)
+
+    if irradiance_type == "instantaneous":
+        df = pd.DataFrame(
+            {"sun_alt": alts, "sun_azimuth": azims, "duration": durations,},
+            index=datetime_index,
+        )
+        df["sun_zenith"] = (np.pi / 2) - df.sun_alt
+        # Sun altitude considered zero if slightly below horizon
+        df["sun_alt"] = df["sun_alt"].clip(lower=0)
+    else:
+        df = pd.DataFrame(
+            {
+                "sun_azimuth": azims,
+                "timestepmean_one_over_cos_sun_zenith": one_over_cos_zenith,
+            },
+            index=datetime_index,
+        )
+
     return df
 
 
@@ -240,6 +259,7 @@ def aperture_irradiance(
     dni_only=False,
     angles=None,
     irradiance_type="instantaneous",
+    subres_steps=None,
 ):
     """
     Parameters
@@ -272,7 +292,10 @@ def aperture_irradiance(
         Choices: "instantaneous" or "cumulative"
         Specify whether the irradiance values in the input data are instantaneous or cumulative. This affects the accuracy of how sun angles and durations are calculated.
         Cumulative values are treated as centered means (e.g., hourly data at 3:30 corresponds to the mean from 3:00 to 4:00).
-
+    subres_steps : None or int, default None
+        If given and irradiance_type is cumulative, this parameter controls the number of subresolution time steps per input data time step.
+        Example: If input temporal resolution is 1 hour and subres_steps = 2, geometry is calculated every 30 Minutes
+        If not given and irradiance_type is cumulative, subres_steps are chosen such that geometry is calculated every 15 Minutes.
     """
     assert irradiance_type in ["instantaneous", "cumulative"]
 
@@ -283,7 +306,9 @@ def aperture_irradiance(
     # 1. Calculate solar angles
     if angles is None:
         sunrise_set_times = sun_rise_set_times(direct.index, coords)
-        angles = sun_angles(direct.index, coords, sunrise_set_times, irradiance_type)
+        angles = sun_angles(
+            direct.index, coords, sunrise_set_times, irradiance_type, subres_steps
+        )
     # 2. Calculate direct normal irradiance
     if irradiance_type == "instantaneous":
         dni = (direct * (angles["duration"] / 60)) / np.cos(angles["sun_zenith"])
