@@ -274,6 +274,7 @@ def run_model(
     angles=None,
     include_raw_data=False,
     irradiance_type="instantaneous",
+    subres_steps=None,
     **kwargs
 ):
     """
@@ -313,7 +314,11 @@ def run_model(
         Choices: "instantaneous" or "cumulative"
         Specify whether the irradiance values in the input data are instantaneous or cumulative. This affects the accuracy of how sun angles and durations are calculated.
         Cumulative values are treated as centered means (e.g., hourly data at 3:30 corresponds to the mean from 3:00 to 4:00).
-    kwargs : additional kwargs passed on the model constructor
+    subres_steps : None or int, default None
+        If given and irradiance_type is cumulative, this parameter controls the number of subresolution time steps per input data time step.
+        Example: If input temporal resolution is 1 hour and subres_steps = 2, geometry is calculated every 30 Minutes
+        If not given and irradiance_type is cumulative, subres_steps are chosen such that geometry is calculated every 15 Minutes.
+kwargs : additional kwargs passed on the model constructor
 
     Returns
     -------
@@ -338,6 +343,7 @@ def run_model(
         tilt=math.radians(tilt),
         angles=angles,
         irradiance_type=irradiance_type,
+        subres_steps=subres_steps,
     )
     datetimes = irrad.index
 
