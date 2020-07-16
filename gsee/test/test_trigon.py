@@ -117,13 +117,22 @@ def _aperture_irradiance(
     irradiance,
     coords_and_datetimes,
     tracking,
-    tilt=math.radians(30),
-    azimuth=math.radians(180),
+    tilt=30,
+    azimuth=180,
+    irradiance_type="instantaneous",
 ):
+    tilt = math.radians(tilt)
+    azimuth = math.radians(azimuth)
     coords = coords_and_datetimes[0]
     direct, diffuse = irradiance["direct"], irradiance["diffuse"]
     result = gsee.trigon.aperture_irradiance(
-        direct, diffuse, coords, tilt=tilt, azimuth=azimuth, tracking=tracking
+        direct,
+        diffuse,
+        coords,
+        tilt=tilt,
+        azimuth=azimuth,
+        tracking=tracking,
+        irradiance_type=irradiance_type,
     )
     return result
 
@@ -135,11 +144,35 @@ def test_aperture_irradiance_tracking_0(irradiance, coords_and_datetimes):
     assert result.mean()["diffuse"] == pytest.approx(59.506055)
 
 
+def test_aperture_irradiance_tracking_0_cumulative(irradiance, coords_and_datetimes):
+    result = _aperture_irradiance(
+        irradiance, coords_and_datetimes, tracking=0, irradiance_type="cumulative"
+    )
+    assert isinstance(result, pd.DataFrame)
+    assert result.mean()["direct"] == pytest.approx(190.965035)
+    assert result.mean()["diffuse"] == pytest.approx(59.506055)
+
+
 def test_aperture_irradiance_tracking_1_horizontal(irradiance, coords_and_datetimes):
     result = _aperture_irradiance(irradiance, coords_and_datetimes, tracking=1, tilt=0)
     assert isinstance(result, pd.DataFrame)
     assert result.mean()["direct"] == pytest.approx(200.394662)
     assert result.mean()["diffuse"] == pytest.approx(57.748641)
+
+
+def test_aperture_irradiance_tracking_1_horizontal_cumulative(
+    irradiance, coords_and_datetimes
+):
+    result = _aperture_irradiance(
+        irradiance,
+        coords_and_datetimes,
+        tracking=1,
+        tilt=0,
+        irradiance_type="cumulative",
+    )
+    assert isinstance(result, pd.DataFrame)
+    assert result.mean()["direct"] == pytest.approx(212.018278)
+    assert result.mean()["diffuse"] == pytest.approx(57.779748)
 
 
 def test_aperture_irradiance_tracking_1_30deg(irradiance, coords_and_datetimes):
@@ -151,9 +184,34 @@ def test_aperture_irradiance_tracking_1_30deg(irradiance, coords_and_datetimes):
     assert result.mean()["diffuse"] == pytest.approx(57.851825)
 
 
+def test_aperture_irradiance_tracking_1_30deg_cumulative(
+    irradiance, coords_and_datetimes
+):
+    result = _aperture_irradiance(
+        irradiance,
+        coords_and_datetimes,
+        tracking=1,
+        tilt=math.radians(30),
+        irradiance_type="cumulative",
+    )
+    assert isinstance(result, pd.DataFrame)
+    assert result.mean()["direct"] == pytest.approx(212.952307)
+    assert result.mean()["diffuse"] == pytest.approx(57.800644)
+
+
 def test_aperture_irradiance_tracking_2(irradiance, coords_and_datetimes):
     result = _aperture_irradiance(irradiance, coords_and_datetimes, tracking=2)
     assert isinstance(result, pd.DataFrame)
     assert result.mean()["direct"] == pytest.approx(260.944585)
     assert result.mean()["diffuse"] == pytest.approx(58.169813)
     assert result.loc["2000-12-31 12:00:00", "direct"] == pytest.approx(1448.694722)
+
+
+def test_aperture_irradiance_tracking_2_cumulative(irradiance, coords_and_datetimes):
+    result = _aperture_irradiance(
+        irradiance, coords_and_datetimes, tracking=2, irradiance_type="cumulative"
+    )
+    assert isinstance(result, pd.DataFrame)
+    assert result.mean()["direct"] == pytest.approx(273.773029)
+    assert result.mean()["diffuse"] == pytest.approx(58.167657)
+    assert result.loc["2000-12-31 12:00:00", "direct"] == pytest.approx(1390.97316)
