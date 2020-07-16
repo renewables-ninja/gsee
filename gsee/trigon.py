@@ -162,8 +162,9 @@ def sun_angles(
                 sun_azimuth = 0
                 sun_alt = 0
 
-        azims.append(sun_azimuth)
         alts.append(sun_alt)
+        azims.append(sun_azimuth)
+        durations.append(duration)
 
     if irradiance_type == "instantaneous":
         df = pd.DataFrame(
