@@ -105,7 +105,7 @@ def sun_angles(
     if rise_set_times is None:
         rise_set_times = sun_rise_set_times(datetime_index, coords)
 
-    # Calculate hourly altitute, azimuth, and sunshine
+    # Calculate hourly altitude, azimuth, and sunshine
     alts = []
     azims = []
     one_over_cos_zenith = []
@@ -113,7 +113,6 @@ def sun_angles(
 
     for index, item in enumerate(datetime_index):
         obs.date = item
-
         if irradiance_type == "instantaneous":
             # rise/set times are indexed by day, so need to adjust lookup
             rise_time, set_time = rise_set_times.loc[item.date()]
@@ -136,11 +135,10 @@ def sun_angles(
                 if sun_alt < 0:  # If sun is below horizon
                     sun_alt, sun_azimuth, duration = 0, 0, 0
             durations.append(duration)
-            alts.append(sun_alt)
-        # it assumes that input radiation data is a centered running mean
+        # Assuming that input radiation data is a centered running mean
         elif irradiance_type == "cumulative":
-            # sun azimuth calculated at center
-            sun_azimuth = _sun_alt_azim(sun, obs)[1]
+            # sun altitude and azimuth calculated at center
+            sun_alt, sun_azimuth = _sun_alt_azim(sun, obs)
             timestep = (
                 datetime_index[1] - datetime_index[0]
             )  # benefit: independent of input resolution
@@ -162,12 +160,14 @@ def sun_angles(
             one_over_cos_zenith.append(np.mean(tmp_one_over_cos))
             if np.mean(tmp_one_over_cos) == 0:
                 sun_azimuth = 0
+                sun_alt = 0
 
         azims.append(sun_azimuth)
+        alts.append(sun_alt)
 
     if irradiance_type == "instantaneous":
         df = pd.DataFrame(
-            {"sun_alt": alts, "sun_azimuth": azims, "duration": durations,},
+            {"sun_alt": alts, "sun_azimuth": azims, "duration": durations},
             index=datetime_index,
         )
         df["sun_zenith"] = (np.pi / 2) - df.sun_alt
@@ -177,6 +177,7 @@ def sun_angles(
         df = pd.DataFrame(
             {
                 "sun_azimuth": azims,
+                "sun_alt": alts,
                 "timestepmean_one_over_cos_sun_zenith": one_over_cos_zenith,
             },
             index=datetime_index,
@@ -334,7 +335,7 @@ def aperture_irradiance(
         # 2-axis tracking means incidence angle is zero
         # Assuming azimuth/elevation tracking for tilt/azimuth angles
         incidence = 0
-        panel_tilt = angles["sun_zenith"]
+        panel_tilt = (np.pi / 2) - angles["sun_alt"]  # definition of sun zenith
         azimuth = angles["sun_azimuth"]
     else:
         raise ValueError("Invalid setting for tracking: {}".format(tracking))
