@@ -10,7 +10,9 @@ import warnings
 from mpl_toolkits.basemap import Basemap
 
 
-def create_pdfs_from_ds(ds, outfile, only_land=True, proximity=True, lat_bounds=(-60, 75)):
+def create_pdfs_from_ds(
+    ds, outfile, only_land=True, proximity=True, lat_bounds=(-60, 75)
+):
     """
     Creates new file contaning the probabiliy densitiy functions for each month of how often a specific amount of
     radation can occur. This is done for every grid-cell from the incoming dataset.
@@ -33,8 +35,8 @@ def create_pdfs_from_ds(ds, outfile, only_land=True, proximity=True, lat_bounds=
     """
 
     # Create list of all (lat, lon) pairs to be processed:
-    tlat = ds['lat'].values
-    tlon = ds['lon'].values
+    tlat = ds["lat"].values
+    tlon = ds["lon"].values
     lat_dist = np.unique(np.diff(tlat))
     assert len(lat_dist) == 1
     lat_dist = int(lat_dist[0])
@@ -42,9 +44,9 @@ def create_pdfs_from_ds(ds, outfile, only_land=True, proximity=True, lat_bounds=
     assert len(lon_dist) == 1
     lon_dist = int(lon_dist[0])
 
-    time = pd.to_datetime(ds['time'].values)
-    ds['time'] = time.map(lambda x: x.month)
-    ds = ds.rename({'time': 'month'})
+    time = pd.to_datetime(ds["time"].values)
+    ds["time"] = time.map(lambda x: x.month)
+    ds = ds.rename({"time": "month"})
     coord_list = []
     if only_land:
         bm = Basemap()
@@ -67,15 +69,23 @@ def create_pdfs_from_ds(ds, outfile, only_land=True, proximity=True, lat_bounds=
     # Processing all the data of the coordinate tuples in coord_list
     num_cores = multiprocessing.cpu_count()
     manager = multiprocessing.Manager()
-    assert len(tlat)*len(tlon) >= len(coord_list)
-    shr_mem = manager.list([None] * len(tlat)*len(tlon))
+    assert len(tlat) * len(tlon) >= len(coord_list)
+    shr_mem = manager.list([None] * len(tlat) * len(tlon))
     prog_mem = manager.list()
     with warnings.catch_warnings():
-        warnings.simplefilter('ignore')
-        Parallel(n_jobs=num_cores)(delayed(calc_pdfs)(ds.sel(lon=coords[1], lat=coords[0]),
-                                                      i, shr_mem, prog_mem, coords, len(coord_list))
-                                                        for i, coords in enumerate(coord_list))
-    print('\nfinished parallel part, stitching together')
+        warnings.simplefilter("ignore")
+        Parallel(n_jobs=num_cores)(
+            delayed(calc_pdfs)(
+                ds.sel(lon=coords[1], lat=coords[0]),
+                i,
+                shr_mem,
+                prog_mem,
+                coords,
+                len(coord_list),
+            )
+            for i, coords in enumerate(coord_list)
+        )
+    print("\nfinished parallel part, stitching together")
     ds_out = xr.Dataset()
     xartype = type(ds)
     for piece in shr_mem:
@@ -84,14 +94,25 @@ def create_pdfs_from_ds(ds, outfile, only_land=True, proximity=True, lat_bounds=
 
     ds_out = ds_out.sel(lat=slice(lat_bounds[0], lat_bounds[1]))
     # encoding_params = {'dtype': 'int16', 'scale_factor': 0.00005, '_FillValue': -9999, 'zlib': True, 'complevel': 2}
-    encoding_params = {'dtype': 'float32', '_FillValue': -9999, 'zlib': True, 'complevel': 4}
+    encoding_params = {
+        "dtype": "float32",
+        "_FillValue": -9999,
+        "zlib": True,
+        "complevel": 4,
+    }
     encoding = {
-        'pk': {'dtype': 'float32', '_FillValue': -9999, 'zlib': True, 'complevel': 5},
-        'xk': {'dtype': 'int16', 'scale_factor': 0.02, '_FillValue': -9999, 'zlib': True, 'complevel': 5},
+        "pk": {"dtype": "float32", "_FillValue": -9999, "zlib": True, "complevel": 5},
+        "xk": {
+            "dtype": "int16",
+            "scale_factor": 0.02,
+            "_FillValue": -9999,
+            "zlib": True,
+            "complevel": 5,
+        },
     }
     # encoding = {k: encoding_params for k in list(ds_out.data_vars)}
-    ds_out.to_netcdf(path=outfile, format='NETCDF4', encoding=encoding)
-    print('File is saved')
+    ds_out.to_netcdf(path=outfile, format="NETCDF4", encoding=encoding)
+    print("File is saved")
 
 
 def calc_pdfs(ds, i, shr_mem, prog_mem, coords, len_coord_list):
@@ -115,15 +136,24 @@ def calc_pdfs(ds, i, shr_mem, prog_mem, coords, len_coord_list):
         length of coord_list, used for progress bar
     """
     ds_out = xr.Dataset()
-    for mo in range(1,13):
+    for mo in range(1, 13):
         ds_mo = ds.sel(month=mo)
-        da_mo = ds_mo['SWGDN'].values
+        da_mo = ds_mo["SWGDN"].values
         fig = plt.figure()
         ax = fig.add_subplot()
         xk, pk = sns_distplot(da_mo, ax=ax).get_lines()[0].get_data()
         pk = pk / sum(pk)
-        ds_out_mo = pd.DataFrame({'xk': xk, 'pk': pk, 'lat': coords[0], 'lon': coords[1], 'month': mo, 'bins': range(0, len(pk))})
-        ds_out_mo = ds_out_mo.set_index(['lat', 'lon', 'month', 'bins'])
+        ds_out_mo = pd.DataFrame(
+            {
+                "xk": xk,
+                "pk": pk,
+                "lat": coords[0],
+                "lon": coords[1],
+                "month": mo,
+                "bins": range(0, len(pk)),
+            }
+        )
+        ds_out_mo = ds_out_mo.set_index(["lat", "lon", "month", "bins"])
         ds_out_xk_pk = ds_out_mo.to_xarray().copy()
         ds_out = xr.merge([ds_out, ds_out_xk_pk])
         plt.close()

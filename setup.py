@@ -3,10 +3,10 @@
 from setuptools import setup, find_packages, Extension
 
 # Sets the __version__ variable
-with open('gsee/_version.py', 'r') as f:
+with open("gsee/_version.py", "r") as f:
     exec(f.read())
 
-with open('README.md', 'r') as f:
+with open("README.md", "r") as f:
     long_description = f.read()
 
 # Numpy headers are always required for compliation, but to allow
@@ -14,6 +14,7 @@ with open('README.md', 'r') as f:
 # the numpy import must be wrapped in a try-except block.
 try:
     import numpy as np
+
     numpy_include = [np.get_include()]
 except ImportError:
     numpy_include = []
@@ -23,36 +24,42 @@ except ImportError:
 try:
     from Cython.Build import cythonize
 except ImportError:
-    if not os.path.exists('gsee/climatedata_interface/kt_h_sinusfunc.c'):
+    if not os.path.exists("gsee/climatedata_interface/kt_h_sinusfunc.c"):
         raise ImportError(
-            'Pre-built Cython module does not exist and Cython cannot be imported. '
-            'Please install Cython.')
-    print('Attempting to compile pre-built Cython module')
+            "Pre-built Cython module does not exist and Cython cannot be imported. "
+            "Please install Cython."
+        )
+    print("Attempting to compile pre-built Cython module")
     from setuptools.command.build_ext import build_ext
-    ext_modules = [Extension(
-        "gsee.climatedata_interface.kt_h_sinusfunc",
-        ["gsee/climatedata_interface/kt_h_sinusfunc.c"],
-        include_dirs=numpy_include
-    )]
-else:
-    print('Attempting to build Cython module from Cython source')
-    ext_modules = cythonize([
+
+    ext_modules = [
         Extension(
             "gsee.climatedata_interface.kt_h_sinusfunc",
-            ["gsee/climatedata_interface/kt_h_sinusfunc.pyx"],
-            include_dirs=numpy_include
+            ["gsee/climatedata_interface/kt_h_sinusfunc.c"],
+            include_dirs=numpy_include,
         )
-    ])
+    ]
+else:
+    print("Attempting to build Cython module from Cython source")
+    ext_modules = cythonize(
+        [
+            Extension(
+                "gsee.climatedata_interface.kt_h_sinusfunc",
+                ["gsee/climatedata_interface/kt_h_sinusfunc.pyx"],
+                include_dirs=numpy_include,
+            )
+        ]
+    )
 
 setup(
-    name='gsee',
+    name="gsee",
     version=__version__,
-    author='Stefan Pfenninger',
-    author_email='stefan@pfenninger.org',
-    description='GSEE: Global Solar Energy Estimator',
+    author="Stefan Pfenninger",
+    author_email="stefan@pfenninger.org",
+    description="GSEE: Global Solar Energy Estimator",
     long_description=long_description,
-    long_description_content_type='text/markdown',
-    url='https://github.com/renewables-ninja/gsee',
+    long_description_content_type="text/markdown",
+    url="https://github.com/renewables-ninja/gsee",
     packages=find_packages(),
     include_package_data=True,
     ext_modules=ext_modules,
@@ -68,16 +75,12 @@ setup(
         "scipy >= 1.1.0",
         "xarray >= 0.14.1, < 0.15",
     ],
-    setup_requires=[
-        "numpy >= 1.15.0",
-    ],
-    extras_require={
-        'generate_pdfs': ["basemap >= 1.1.0", "seaborn >= 0.9.0"],
-    },
+    setup_requires=["numpy >= 1.15.0",],
+    extras_require={"generate_pdfs": ["basemap >= 1.1.0", "seaborn >= 0.9.0"],},
     classifiers=[
-        'Development Status :: 4 - Beta',
-        'Intended Audience :: Science/Research',
-        'Programming Language :: Python',
-        'Programming Language :: Python :: 3',
+        "Development Status :: 4 - Beta",
+        "Intended Audience :: Science/Research",
+        "Programming Language :: Python",
+        "Programming Language :: Python :: 3",
     ],
 )

@@ -14,11 +14,12 @@ from gsee.climatedata_interface import util
 
 
 def run_interface_from_dataset(
-        data: xr.Dataset,
-        params: dict,
-        frequency='detect',
-        pdfs_file='builtin',
-        num_cores=multiprocessing.cpu_count()) -> xr.Dataset:
+    data: xr.Dataset,
+    params: dict,
+    frequency="detect",
+    pdfs_file="builtin",
+    num_cores=multiprocessing.cpu_count(),
+) -> xr.Dataset:
     """
     Parameters
     ----------
@@ -53,11 +54,11 @@ def run_interface_from_dataset(
     frequency = _detect_frequency(data, frequency)
 
     # Produce list of coordinates of all grid points to iterate over
-    coord_list = list(product(data['lat'].values, data['lon'].values))
+    coord_list = list(product(data["lat"].values, data["lon"].values))
 
     # Modify time dimension so it fits the requirements of
     # the "resample_for_gsee" function
-    data['time'] = _mod_time_dim(pd.to_datetime(data['time'].values), frequency)
+    data["time"] = _mod_time_dim(pd.to_datetime(data["time"].values), frequency)
 
     # Shareable list with a place for every coordinate in the grid
     manager = multiprocessing.Manager()
@@ -70,64 +71,83 @@ def run_interface_from_dataset(
     start = time.time()
 
     if pdfs_file is not None:
-        if frequency in ['A', 'S', 'M']:
-            pdfs_path = util.return_pdf_path() if pdfs_file == 'builtin' else pdfs_file
+        if frequency in ["A", "S", "M"]:
+            pdfs_path = util.return_pdf_path() if pdfs_file == "builtin" else pdfs_file
             pdfs = xr.open_dataset(pdfs_path)
-            pdf_coords = list(product(pdfs['lat'].values, pdfs['lon'].values))
+            pdf_coords = list(product(pdfs["lat"].values, pdfs["lon"].values))
             tree = spatial.KDTree(pdf_coords)
             coord_list_nn = [pdf_coords[int(tree.query([x])[1])] for x in coord_list]
         else:
             raise ValueError(
                 'For frequencies other than "A", "M", or "D", '
-                '`pdfs_file` must be explicitly set to None.'
+                "`pdfs_file` must be explicitly set to None."
             )
 
     if num_cores > 1:
         from joblib import Parallel, delayed, wrap_non_picklable_objects
         from joblib.parallel import get_active_backend
-        print('Parallel mode: {} cores'.format(num_cores))
-        Parallel(n_jobs=num_cores)(delayed(wrap_non_picklable_objects(resample_for_gsee))(
-            data.sel(lat=coords[0], lon=coords[1]), frequency, params,
-            i, coords, shr_mem, prog_mem,
-            None if pdfs_file is None else pdfs.sel(lat=coord_list_nn[i][0], lon=coord_list_nn[i][1])
-        ) for i, coords in enumerate(coord_list))
+
+        print("Parallel mode: {} cores".format(num_cores))
+        Parallel(n_jobs=num_cores)(
+            delayed(wrap_non_picklable_objects(resample_for_gsee))(
+                data.sel(lat=coords[0], lon=coords[1]),
+                frequency,
+                params,
+                i,
+                coords,
+                shr_mem,
+                prog_mem,
+                None
+                if pdfs_file is None
+                else pdfs.sel(lat=coord_list_nn[i][0], lon=coord_list_nn[i][1]),
+            )
+            for i, coords in enumerate(coord_list)
+        )
     else:
-        print('Single core mode')
+        print("Single core mode")
         for i, coords in enumerate(coord_list):
             resample_for_gsee(
                 data.sel(lat=coords[0], lon=coords[1]),
-                frequency, params, i, coords, shr_mem, prog_mem,
-                None if pdfs_file is None else pdfs.sel(lat=coord_list_nn[i][0], lon=coord_list_nn[i][1])
+                frequency,
+                params,
+                i,
+                coords,
+                shr_mem,
+                prog_mem,
+                None
+                if pdfs_file is None
+                else pdfs.sel(lat=coord_list_nn[i][0], lon=coord_list_nn[i][1]),
             )
 
     end = time.time()
-    print('\nComputation part took: {} seconds'.format(str(round(end - start, 2))))
+    print("\nComputation part took: {} seconds".format(str(round(end - start, 2))))
 
     # Stitch together the data
     result = xr.Dataset()
     for piece in shr_mem:
         if type(piece) == type(data):
             result = xr.merge([result, piece])
-    result = result.transpose('time', 'lat', 'lon')
-    result['time'] = data['time']
-    if frequency == 'H':
-        result['pv'].attrs['unit'] = 'Wh'
-    elif frequency in ['A', 'S', 'M', 'D']:
-        result['pv'].attrs['unit'] = 'Wh/day'
+    result = result.transpose("time", "lat", "lon")
+    result["time"] = data["time"]
+    if frequency == "H":
+        result["pv"].attrs["unit"] = "Wh"
+    elif frequency in ["A", "S", "M", "D"]:
+        result["pv"].attrs["unit"] = "Wh/day"
 
     return result
 
 
 def run_interface(
-        ghi_data: tuple,
-        outfile: str,
-        params: dict,
-        frequency='detect',
-        diffuse_data=('', ''),
-        temp_data=('', ''),
-        timeformat=None,
-        pdfs_file='builtin',
-        num_cores=multiprocessing.cpu_count()):
+    ghi_data: tuple,
+    outfile: str,
+    params: dict,
+    frequency="detect",
+    diffuse_data=("", ""),
+    temp_data=("", ""),
+    timeformat=None,
+    pdfs_file="builtin",
+    num_cores=multiprocessing.cpu_count(),
+):
     """
     Input file must include 'time', 'lat' and 'lon' dimensions.
 
@@ -177,31 +197,36 @@ def run_interface(
     # Read Files:
     ds_merged, ds_in = _open_files(ghi_data, diffuse_data, temp_data)
 
-    if timeformat in ['cmip', 'cmip5', 'cmip6']:
+    if timeformat in ["cmip", "cmip5", "cmip6"]:
         try:
-            ds_merged['time'] = _parse_cmip_time_data(ds_merged)
+            ds_merged["time"] = _parse_cmip_time_data(ds_merged)
         except Exception:
             raise ValueError(
                 'Parsing of "cmip5" time dimension failed. Set timeformat to None, or check your data.'
             )
 
     # Check whether the time dimension was recognised correctly and interpreted as time by dataset
-    if not type(ds_merged['time'].values[0]) is np.datetime64:
+    if not type(ds_merged["time"].values[0]) is np.datetime64:
         raise ValueError(
             'Time format not recognised. Try setting timeformat="cmip5" or check your data.'
         )
 
     if os.path.isfile(outfile):
-        print('{} already exists --> skipping'.format(outfile.split('/', -1)[-1]))
+        print("{} already exists --> skipping".format(outfile.split("/", -1)[-1]))
     else:
-        print('{} does not yet exist --> Computing in '.format(outfile.split('/', -1)[-1]), end='')
+        print(
+            "{} does not yet exist --> Computing in ".format(
+                outfile.split("/", -1)[-1]
+            ),
+            end="",
+        )
 
         ds_pv = run_interface_from_dataset(
             data=ds_merged,
             params=params,
             frequency=frequency,
             pdfs_file=pdfs_file,
-            num_cores=num_cores
+            num_cores=num_cores,
         )
 
         # Kill leftover coordinates that no variable is indexed over
@@ -210,7 +235,7 @@ def run_interface(
             del ds_pv[coord]
 
         # Carry over CF attributes from the remaining dimensions
-        for attr in ['standard_name', 'long_name', 'units', 'axis']:
+        for attr in ["standard_name", "long_name", "units", "axis"]:
             for dim in ds_pv.dims:
                 if attr in ds_in[dim].attrs and attr not in ds_pv[dim].attrs:
                     ds_pv[dim].attrs[attr] = ds_in[dim].attrs[attr]
@@ -221,19 +246,20 @@ def run_interface(
         # results back to NetCDF and attempting to serialise our parsed time
         # dimension back to units/calendar attributes that it expects
         # not to already exist.
-        for attr in ['units', 'calendar']:
+        for attr in ["units", "calendar"]:
             if attr in ds_pv.time.attrs:
                 del ds_pv.time.attrs[attr]
 
         # Save results with zlib compression
-        encoding_params = {'zlib': True, 'complevel': 4}
+        encoding_params = {"zlib": True, "complevel": 4}
         encoding = {k: encoding_params for k in list(ds_pv.data_vars)}
-        ds_pv.to_netcdf(path=outfile, format='NETCDF4', encoding=encoding)
+        ds_pv.to_netcdf(path=outfile, format="NETCDF4", encoding=encoding)
 
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Support functions for run_interface_from_dataset:
 # ----------------------------------------------------------------------------------------------------------------------
+
 
 def _mod_time_dim(time_dim: pd.date_range, freq: str):
     """
@@ -250,27 +276,40 @@ def _mod_time_dim(time_dim: pd.date_range, freq: str):
     array
         modified time dimension
     """
-    if freq == 'A':
+    if freq == "A":
         # Annual data is set to the beginning of the year
-        return time_dim.map(lambda x: pd.Timestamp(year=x.year, month=1, day=1, hour=0, minute=0))
-    elif freq in ['S', 'M']:
+        return time_dim.map(
+            lambda x: pd.Timestamp(year=x.year, month=1, day=1, hour=0, minute=0)
+        )
+    elif freq in ["S", "M"]:
         # Seasonal data is set to middle of month, as it is often represented with the day in the middle of the season.
         # Monthly data is set to middle of month
-        return time_dim.map(lambda x: pd.Timestamp(year=x.year, month=x.month,
-                                                   day=int(monthrange(x.year, x.month)[1] / 2), hour=0,
-                                                   minute=0))
-    elif freq == 'D':
+        return time_dim.map(
+            lambda x: pd.Timestamp(
+                year=x.year,
+                month=x.month,
+                day=int(monthrange(x.year, x.month)[1] / 2),
+                hour=0,
+                minute=0,
+            )
+        )
+    elif freq == "D":
         # Daily data is set to 00:00 hours of the day
-        return time_dim.map(lambda x: pd.Timestamp(year=x.year, month=x.month, day=x.day, hour=0, minute=0))
+        return time_dim.map(
+            lambda x: pd.Timestamp(
+                year=x.year, month=x.month, day=x.day, hour=0, minute=0
+            )
+        )
     else:
         return time_dim
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 # Support functions for run_interface:
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-def _detect_frequency(ds: xr.Dataset, frequency='detect'):
+def _detect_frequency(ds: xr.Dataset, frequency="detect"):
     """
     Tries to detect the frequency of the given dataset.
 
@@ -294,38 +333,47 @@ def _detect_frequency(ds: xr.Dataset, frequency='detect'):
     # Tries to detect frequency, otherwise falls back to manual entry, also compares if the two match:
     nc_freq = None
     try:
-        nc_freq = ds.attrs['frequency']
+        nc_freq = ds.attrs["frequency"]
     except KeyError:
         try:
-            nc_freq = pd.DatetimeIndex(data=ds['time'].values).inferred_freq[0]
+            nc_freq = pd.DatetimeIndex(data=ds["time"].values).inferred_freq[0]
         except:
             pass
     if not nc_freq:
-        print('> No frequency detected --> checking manually given frequency', end='')
-        if frequency in ['A', 'S', 'M', 'D', 'H']:
-            print('...Manual entry is valid')
+        print("> No frequency detected --> checking manually given frequency", end="")
+        if frequency in ["A", "S", "M", "D", "H"]:
+            print("...Manual entry is valid")
             data_freq = frequency
         else:
-            raise ValueError('Detect failed or manual entry is invalid.')
+            raise ValueError("Detect failed or manual entry is invalid.")
     else:
-        if nc_freq == 'year':
-            data_freq = 'A'
-        elif nc_freq == 'mon':
-            data_freq = 'M'
-        elif nc_freq == 'day':
-            data_freq = 'D'
+        if nc_freq == "year":
+            data_freq = "A"
+        elif nc_freq == "mon":
+            data_freq = "M"
+        elif nc_freq == "day":
+            data_freq = "D"
         else:
             data_freq = nc_freq
-        print('> Detected frequency: {}'.format(data_freq))
+        print("> Detected frequency: {}".format(data_freq))
 
-    if frequency == 'S' and data_freq not in ['A', 'M', 'D', 'H']:
-        print('> Frequency is detected, but is not "A", "M", "D", or "H" thus assumed some kind of seasonal')
+    if frequency == "S" and data_freq not in ["A", "M", "D", "H"]:
+        print(
+            '> Frequency is detected, but is not "A", "M", "D", or "H" thus assumed some kind of seasonal'
+        )
         return frequency
-    if data_freq in ['A', 'S', 'M', 'D', 'H'] and frequency != data_freq and frequency != 'detect':
+    if (
+        data_freq in ["A", "S", "M", "D", "H"]
+        and frequency != data_freq
+        and frequency != "detect"
+    ):
         raise Warning(
-            '\tManual given frequency is valid, however it does not match detected frequency. Check settings!')
-    if data_freq not in ['A', 'S', 'M', 'D', 'H']:
-        raise ValueError('> Time frequency invalid, use one from ["A", "S", "M", "D", "H"]')
+            "\tManual given frequency is valid, however it does not match detected frequency. Check settings!"
+        )
+    if data_freq not in ["A", "S", "M", "D", "H"]:
+        raise ValueError(
+            '> Time frequency invalid, use one from ["A", "S", "M", "D", "H"]'
+        )
     return data_freq
 
 
@@ -344,9 +392,13 @@ def _parse_cmip_time_data(ds: xr.Dataset):
 
     """
     # Translates date-string used in CMIP5 data to datetime-objects
-    timestr = [str(ti) for ti in ds['time'].values]
-    vfunc = np.vectorize(lambda x: np.datetime64('{}-{}-{}T{:02d}:{}'.format(
-        x[:4], x[4:6], x[6:8], int(24 * float('0.' + x[9:])), '00'))
+    timestr = [str(ti) for ti in ds["time"].values]
+    vfunc = np.vectorize(
+        lambda x: np.datetime64(
+            "{}-{}-{}T{:02d}:{}".format(
+                x[:4], x[4:6], x[6:8], int(24 * float("0." + x[9:])), "00"
+            )
+        )
     )
     return vfunc(timestr)
 
@@ -379,35 +431,41 @@ def _open_files(ghi_data: tuple, diffuse_data: tuple, temp_data: tuple):
     try:
         ds_ghi_in = xr.open_dataset(ghi_file)
     except Exception:
-        raise FileNotFoundError('Radiation file not found')
+        raise FileNotFoundError("Radiation file not found")
 
     # makes sure only the specified variable gets used further:
     ds_ghi = ds_ghi_in[ghi_var].to_dataset()
-    ds_merged = ds_ghi.rename({ghi_var: 'global_horizontal'})
+    ds_merged = ds_ghi.rename({ghi_var: "global_horizontal"})
 
     # Open diffuse_fraction file:
     try:
         ds_diffuse_in = xr.open_dataset(diffuse_file)
         ds_diffuse = ds_diffuse_in[diffuse_var].to_dataset()
         if ds_ghi.dims != ds_diffuse.dims:
-            raise ValueError('Dimension of diffuse fraciton file does not match radiation file')
-        ds_merged = xr.merge([ds_merged, ds_diffuse]).rename({diffuse_var: 'diffuse_fraction'})
+            raise ValueError(
+                "Dimension of diffuse fraciton file does not match radiation file"
+            )
+        ds_merged = xr.merge([ds_merged, ds_diffuse]).rename(
+            {diffuse_var: "diffuse_fraction"}
+        )
 
     except OSError:
-        print('> No diffuse fraction file found -> will calculate with BRL-Model')
+        print("> No diffuse fraction file found -> will calculate with BRL-Model")
     # Open temperature file:
     try:
         ds_temp_in = xr.open_dataset(temp_file)
         ds_temp = ds_temp_in[temp_var].to_dataset()
         if ds_temp[temp_var].mean().values > 200:
-            print('> Average temperature above 200° detected --> will convert to °C')
+            print("> Average temperature above 200° detected --> will convert to °C")
             ds_temp = ds_temp - 273.15  # convert form kelvin to celsius
         if ds_ghi.dims != ds_temp.dims:
-            raise ValueError('Dimension of temperature file does not match radiation file')
-        ds_merged = xr.merge([ds_merged, ds_temp]).rename({temp_var: 'temperature'})
+            raise ValueError(
+                "Dimension of temperature file does not match radiation file"
+            )
+        ds_merged = xr.merge([ds_merged, ds_temp]).rename({temp_var: "temperature"})
 
     except OSError:
-        print('> No temperature file found -> will assume 20°C default value')
+        print("> No temperature file found -> will assume 20°C default value")
 
     assert ds_merged.dims == ds_ghi.dims
 
