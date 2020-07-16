@@ -1,5 +1,6 @@
 import sys
 
+
 def progress_bar(current_length: int, total: int):
     """
     Draws a progress bar in the terminal depending on:
@@ -16,5 +17,9 @@ def progress_bar(current_length: int, total: int):
     fract = curr / total
     progress = int(fract * width)
     left = width - progress
-    sys.stdout.write('\r\t[{}{}{}] {}%'.format((progress - 2) * '=', 2 * '>', left * ' ', round(fract * 100)))
+    sys.stdout.write(
+        "\r\t[{}{}{}] {}%".format(
+            (progress - 2) * "=", 2 * ">", left * " ", round(fract * 100)
+        )
+    )
     sys.stdout.flush()
