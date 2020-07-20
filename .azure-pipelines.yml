@@ -44,10 +44,10 @@ steps:
       conda config --set always_yes yes --set changeps1 no
       conda update -q conda
       conda info -a
-      conda env create -n gsee --file requirements/base.yml python=$PY_VERSION
     displayName: Configure conda and create environment
 
   - bash: |
+      python conda_create.py requirements.yml --python_version=$PYTHON_VERSION --channels conda-forge defaults --run
       source activate gsee
       pip install coverage codecov pytest pytest-cov
       pip install --no-cache-dir --verbose -e .
@@ -55,8 +55,9 @@ steps:
     displayName: Set up environment and run tests (UNIX)
     condition: ne( variables['Agent.OS'], 'Windows_NT' )
 
-  # Must manually activate base environment else conda_create.py fails
   - script: |
+      call activate base
+      python conda_create.py requirements.yml --python_version=$PYTHON_VERSION --channels conda-forge defaults --run
       call activate gsee
       pip install coverage codecov pytest pytest-cov
       pip install --no-cache-dir --verbose -e .

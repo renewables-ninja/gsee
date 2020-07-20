@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import os
 from setuptools import setup, find_packages, Extension
 
 # Sets the __version__ variable
@@ -69,11 +70,11 @@ setup(
         "distributed >= 2.8",
         "joblib >= 0.12",
         "numpy >= 1.15.0",
-        "pandas >= 0.25.3, < 0.26",
+        "pandas >= 1.0, < 1.1",
         "pvlib >= 0.6.3",
         "pyephem >= 3.7.6",
         "scipy >= 1.1.0",
-        "xarray >= 0.14.1, < 0.15",
+        "xarray >= 0.16, < 0.17",
     ],
     setup_requires=["numpy >= 1.15.0",],
     extras_require={"generate_pdfs": ["basemap >= 1.1.0", "seaborn >= 0.9.0"],},
