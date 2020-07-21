@@ -32,6 +32,7 @@ from gsee import trigon, cec_tools
 R_TAMB = 20  # Reference ambient temperature (degC)
 R_TMOD = 25  # Reference module temperature (degC)
 R_IRRADIANCE = 1000  # Reference irradiance (W/m2)
+R_WINDSPEED = 5  # Reference wind speed (m/2)
 
 
 class PVPanel(object):
@@ -88,20 +89,34 @@ class PVPanel(object):
 
 class SingleDiodePanel(PVPanel):
     """
+    PV panel model using `pvlib.pvsystem.calcparams_desoto` and
+    `pvlib.pvsystem.singlediode`.
+
     module_params : dict
-        Module params 'alpha_sc', 'a_ref', 'I_L_ref', 'I_o_ref',
+        Module parameters 'alpha_sc', 'a_ref', 'I_L_ref', 'I_o_ref',
         'R_sh_ref', 'R_s'.
+    temperature_params : dict or str
+        If dict: must contain the keys "a", "b", "deltaT"
+        If str: one of "open_rack_glass_glass", "close_mount_glass_glass",
+        "open_rack_glass_polymer", "insulated_back_glass_polymer"
     ref_windspeed : float, default 5
         Reference wind speed (m/2).
 
     """
 
-    def __init__(self, module_params, ref_windspeed=5, **kwargs):
+    def __init__(
+        self,
+        module_params,
+        temperature_params="open_rack_glass_glass",
+        ref_windspeed=R_WINDSPEED,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         # Some very simple checking of inputs
         for k in ["alpha_sc", "a_ref", "I_L_ref", "I_o_ref", "R_sh_ref", "R_s"]:
             assert k in module_params
         self.module_params = module_params
+        self.temperature_params = temperature_params
         self.ref_windspeed = ref_windspeed
 
     def panel_relative_efficiency(self, irradiance, tamb, windspeed=None):
@@ -114,12 +129,21 @@ class SingleDiodePanel(PVPanel):
         """
         if windspeed is None:
             windspeed = self.ref_windspeed
-        module_temperature = pvlib.pvsystem.sapm_celltemp(irradiance, windspeed, tamb)[
-            "temp_module"
-        ]
+        if isinstance(self.temperature_params, str):
+            self.temperature_params = pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS[
+                "sapm"
+            ][self.temperature_params]
+
+        a = self.temperature_params["a"]
+        b = self.temperature_params["b"]
+        deltaT = self.temperature_params["deltaT"]
+
+        cell_temperature = pvlib.temperature.sapm_cell(
+            irradiance, tamb, windspeed, a, b, deltaT
+        )
 
         efficiency = cec_tools.relative_eff(
-            irradiance, module_temperature, self.module_params
+            irradiance, cell_temperature, self.module_params
         )
 
         return efficiency
@@ -127,6 +151,8 @@ class SingleDiodePanel(PVPanel):
 
 class HuldPanel(PVPanel):
     """
+    Parametric PV panel model from Huld et al., 2010 {1}.
+
     c_temp_amb: float, default 1 degC / degC
         Panel temperature coefficient of ambient temperature
     c_temp_irrad: float, default 0.035 degC / (W/m2)
@@ -221,6 +247,7 @@ _PANEL_TYPES = {
     "csi": HuldCSiPanel,
     "cis": HuldCISPanel,
     "cdte": HuldCdTePanel,
+    "singlediode": SingleDiodePanel,
 }
 
 
@@ -273,7 +300,7 @@ def run_model(
     system_loss=0.10,
     angles=None,
     include_raw_data=False,
-    **kwargs
+    **kwargs,
 ):
     """
     Run PV plant model.
@@ -300,7 +327,7 @@ def run_model(
     use_inverter : bool, optional
         Model inverter capacity and inverter losses (defaults to True).
     technology : str, default 'csi'
-        Panel technology, must be one of 'csi', 'cdte', 'cpv'
+        Panel technology, must be one of 'csi', 'cis', 'cdte', 'singlediode'
     system_loss : float, default 0.10
         Additional system losses not caused by panel and inverter (fraction).
     angles : pandas DataFrame, default None
@@ -352,7 +379,7 @@ def run_model(
     panel = panel_class(
         panel_aperture=capacity * area_per_capacity,
         panel_ref_efficiency=panel_efficiency,
-        **kwargs
+        **kwargs,
     )
 
     # Run the panel model and return output

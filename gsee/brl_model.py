@@ -153,11 +153,13 @@ def run(hourly_clearness, coords, rise_set_times=None):
         Diffuse fractions with the same datetime index as hourly_clearness.
 
     """
+    if rise_set_times is None:
+        rise_set_times = trigon.sun_rise_set_times(hourly_clearness.index, coords)
+
     obs = ephem.Observer()
     obs.lat = str(coords[0])
     obs.lon = str(coords[1])
-    if rise_set_times is None:
-        rise_set_times = trigon._sun_rise_set(hourly_clearness.index, obs)
+
     diffuse_fractions = []
     for i in range(0, len(hourly_clearness), 24):
         # for entry in list in hourly clearness indices:
