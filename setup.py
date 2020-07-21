@@ -20,37 +20,6 @@ try:
 except ImportError:
     numpy_include = []
 
-# If Cython is available, cythonize the .pyx module to a C source file.
-# Else, use the pre-compiled C module.
-try:
-    from Cython.Build import cythonize
-except ImportError:
-    if not os.path.exists("gsee/climatedata_interface/kt_h_sinusfunc.c"):
-        raise ImportError(
-            "Pre-built Cython module does not exist and Cython cannot be imported. "
-            "Please install Cython."
-        )
-    print("Attempting to compile pre-built Cython module")
-    from setuptools.command.build_ext import build_ext
-
-    ext_modules = [
-        Extension(
-            "gsee.climatedata_interface.kt_h_sinusfunc",
-            ["gsee/climatedata_interface/kt_h_sinusfunc.c"],
-            include_dirs=numpy_include,
-        )
-    ]
-else:
-    print("Attempting to build Cython module from Cython source")
-    ext_modules = cythonize(
-        [
-            Extension(
-                "gsee.climatedata_interface.kt_h_sinusfunc",
-                ["gsee/climatedata_interface/kt_h_sinusfunc.pyx"],
-                include_dirs=numpy_include,
-            )
-        ]
-    )
 
 setup(
     name="gsee",
@@ -63,7 +32,13 @@ setup(
     url="https://github.com/renewables-ninja/gsee",
     packages=find_packages(),
     include_package_data=True,
-    ext_modules=ext_modules,
+    ext_modules=[
+        Extension(
+            "gsee.climatedata_interface.kt_h_sinusfunc",
+            ["gsee/climatedata_interface/kt_h_sinusfunc.pyx"],
+            include_dirs=numpy_include,
+        )
+    ],
     zip_safe=False,
     install_requires=[
         "dask >= 2.8",
@@ -76,7 +51,7 @@ setup(
         "scipy >= 1.1.0",
         "xarray >= 0.16, < 0.17",
     ],
-    setup_requires=["numpy >= 1.15.0",],
+    setup_requires=["cython", "numpy >= 1.15.0"],
     extras_require={"generate_pdfs": ["basemap >= 1.1.0", "seaborn >= 0.9.0"],},
     classifiers=[
         "Development Status :: 4 - Beta",
