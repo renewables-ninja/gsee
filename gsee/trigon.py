@@ -100,7 +100,7 @@ def sun_angles(datetime_index, coords, rise_set_times=None):
     for index, item in enumerate(datetime_index):
         obs.date = item
         # rise/set times are indexed by day, so need to adjust lookup
-        rise_time, set_time = rise_set_times.loc[item.date()]
+        rise_time, set_time = rise_set_times.loc[pd.Timestamp(item.date())]
 
         # Set angles, sun altitude and duration based on hour of day:
         if rise_time is not None and item.hour == rise_time.hour:
