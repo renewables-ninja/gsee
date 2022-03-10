@@ -1,0 +1,52 @@
+name: CI
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v3
+        with:
+          cache: pip
+          python-version: "3.10"
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+  lint:
+    # Dependencies are required for some linters.
+    needs: [dependencies]
+    uses: scene-connect/actions/.github/workflows/lint-python.yml@main
+    with:
+      package-manager: pip
+      python-version: "3.10"
+      requirements-files: requirements-dev.txt
+
+  test:
+    needs: [dependencies]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.7", "3.8", "3.9", "3.10"]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python ${{ matrix.python-version }}
+      - uses: actions/setup-python@v3
+        with:
+          cache: pip
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Run pytest
+        uses: liskin/gh-problem-matcher-wrap@v1
+        with:
+          linters: pytest
+          run: python -m pytest -v --cov -n auto
