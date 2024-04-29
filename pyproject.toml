@@ -1,5 +1,13 @@
-[build-system]
-requires = ["setuptools", "wheel", "Cython", "numpy"]
+[tool.pytest.ini_options]
+minversion = "6.0"
+# opts:
+# `--dist=loadscope ` - run tests within classes in series
+# `--strict-markers` - Raise error on unexpected pytest markers being used (add new markers to `markers` config)
+# `-nauto` - parallelise over as many threads as possible (uses pytest-xdist). If debugging (`--pdb`), this will default to one thread.
+# `--cov-report=xml --cov-config=pyproject.toml` - coverage report config for when running in tests (uses pytest-cov; call `--cov` in CLI to switch coverage on; `--cov-config` include to avoid bug)
+addopts = "-rav --dist=loadscope --strict-markers -nauto --cov-report=xml --cov-config=pyproject.toml"
+
+testpaths = ["tests"]
 
 [tool.black]
 line-length = 88
@@ -22,3 +30,39 @@ exclude = '''
   | docs
 )/
 '''
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["gsee*"]
+
+[tool.setuptools]
+license-files = ["LICENSE"]
+
+[project]
+name = "gsee"
+authors = [
+  { name = "Stefan Pfenninger", email = "stefan@pfenninger.org" },
+]
+description="GSEE: Global Solar Energy Estimator"
+readme = "README.md"
+license = { text = "MIT" }
+classifiers = [
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+]
+dynamic = ["version", "dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+version = { attr = "gsee._version.__version__" }
+
+[project.urls]
+repository = "https://github.com/renewables-ninja/gsee"
+changelog = "https://github.com/renewables-ninja/gsee/blob/master/CHANGELOG.md"

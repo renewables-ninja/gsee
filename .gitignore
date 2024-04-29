@@ -6,5 +6,3 @@ dist/
 *.html
 *.cache/
 *.so
-*.c
-gsee/climatedata_interface/pdf_files/*
