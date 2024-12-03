@@ -197,7 +197,7 @@ class HuldPanel(PVPanel):
                 + self.k_1 * np.log(G_)
                 + self.k_2 * (np.log(G_)) ** 2
                 + T_ * (self.k_3 + self.k_4 * np.log(G_) + self.k_5 * (np.log(G_)) ** 2)
-                + self.k_6 * (T_ ** 2)
+                + self.k_6 * (T_**2)
             )
         eff.fillna(0, inplace=True)  # NaNs in case that G_ was <= 0
         eff[eff < 0] = 0  # Also make sure efficiency can't be negative
@@ -308,8 +308,7 @@ def run_model(
     Parameters
     ----------
     data : pandas DataFrame
-        Must contain columns 'global_horizontal' (in W/m2)
-        and 'diffuse_fraction', and may contain a 'temperature' column
+        Must contain columns 'direct_horizontal' and 'diffuse_horizontal (in W/m2), and may contain a 'temperature' column
         for ambient air temperature (in deg C).
     coords : (float, float) tuple
         Latitude and longitude.
@@ -346,14 +345,10 @@ def run_model(
     if (system_loss < 0) or (system_loss > 1):
         raise ValueError("system_loss must be >=0 and <=1")
 
-    # Process data
-    dir_horiz = data.global_horizontal * (1 - data.diffuse_fraction)
-    diff_horiz = data.global_horizontal * data.diffuse_fraction
-
     # NB: aperture_irradiance expects azim/tilt in radians!
     irrad = trigon.aperture_irradiance(
-        dir_horiz,
-        diff_horiz,
+        data.direct_horizontal,
+        data.diffuse_horizontal,
         coords,
         tracking=tracking,
         azimuth=math.radians(azim),
