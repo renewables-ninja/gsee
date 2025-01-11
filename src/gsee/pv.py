@@ -65,15 +65,15 @@ class PVPanel(object):
 
         Parameters
         ----------
-        irradiance : pandas Series
+        irradiance : xarray ndarray
             Incident irradiance hitting the panel(s) in W/m2.
-        tamb : pandas Series, default None
+        tamb : xarray ndarray, default None
             Ambient temperature in deg C. If not given, R_TAMB is used
             for all values.
 
         """
         if tamb is not None:
-            assert irradiance.index.equals(tamb.index), "Data indices must match"
+            assert irradiance.time.equals(tamb.time), "Data indices must match"
         return (
             irradiance
             * self.panel_aperture
@@ -199,8 +199,9 @@ class HuldPanel(PVPanel):
                 + T_ * (self.k_3 + self.k_4 * np.log(G_) + self.k_5 * (np.log(G_)) ** 2)
                 + self.k_6 * (T_**2)
             )
-        eff.fillna(0, inplace=True)  # NaNs in case that G_ was <= 0
-        eff[eff < 0] = 0  # Also make sure efficiency can't be negative
+        # eff.fillna(0, inplace=True)  # NaNs in case that G_ was <= 0
+        # eff[eff < 0] = 0  # Also make sure efficiency can't be negative
+        eff.data = np.nan_to_num(eff.data).clip(min=0)
         return eff
 
 
@@ -286,10 +287,30 @@ class Inverter(object):
             eff = self.efficiency_term * (-0.0162 * zeta - 0.0059 / zeta + 0.9858)
             return min(self.ac_capacity, dc_in * eff)
 
+    def ac_output_arr(self, dc_in):
+        """
+        Parameters
+        ----------
+        df_in : np array
+            DC electricity input in W
+
+        Returns
+        -------
+        ac_output : np array
+            AC electricity output in W
+
+        """
+        if np.all(dc_in == 0):
+            return dc_in
+        else:
+            zeta = dc_in / self.dc_capacity
+            eff = self.efficiency_term * (-0.0162 * zeta - 0.0059 / zeta + 0.9858)
+            return np.minimum(self.ac_capacity, dc_in * eff)
+
 
 def run_model(
     data,
-    coords,
+    # coords,
     tilt,
     azim,
     tracking,
@@ -347,21 +368,27 @@ def run_model(
 
     # NB: aperture_irradiance expects azim/tilt in radians!
     irrad = trigon.aperture_irradiance(
-        data.direct_horizontal,
-        data.diffuse_horizontal,
-        coords,
+        data,
+        # data.direct_horizontal,
+        # data.diffuse_horizontal,
+        # coords,
         tracking=tracking,
         azimuth=math.radians(azim),
         tilt=math.radians(tilt),
         angles=angles,
     )
-    datetimes = irrad.index
+    # datetimes = irrad.index
+    datetimes = irrad.time
 
     # Temperature, if it was given
-    if "temperature" in data.columns:
+    # if "temperature" in data.columns:
+    #     tamb = data["temperature"]
+    # else:
+    #     tamb = pd.Series(R_TAMB, index=datetimes)
+    if "temperature" in data.variables:
         tamb = data["temperature"]
     else:
-        tamb = pd.Series(R_TAMB, index=datetimes)
+        tamb = np.full(data["direct_horizontal"].shape, R_TAMB)
 
     # Set up the panel model
     # NB: panel efficiency is not used here, but we retain the possibility
@@ -379,15 +406,18 @@ def run_model(
 
     # Run the panel model and return output
     irradiance = irrad.direct + irrad.diffuse
-    output = panel.panel_power(irradiance, tamb)
-    dc_out = pd.Series(output, index=datetimes).clip(upper=capacity)
+    dc_out = panel.panel_power(irradiance, tamb).clip(max=capacity)
+    # dc_out.data[dc_out.data >= capacity] = capacity
+    # output = panel.panel_power(irradiance, tamb)
+    # dc_out = pd.Series(output, index=datetimes).clip(upper=capacity)
 
     if inverter_capacity is None:
         inverter_capacity = capacity
 
     if use_inverter:
         inverter = Inverter(inverter_capacity)
-        ac_out = dc_out.apply(inverter.ac_output).clip(lower=0)
+        # ac_out = dc_out.apply(inverter.ac_output).clip(lower=0)
+        ac_out = inverter.ac_output_arr(dc_out).clip(min=0)
         ac_out_final = ac_out * (1 - system_loss)
     else:
         ac_out_final = dc_out * (1 - system_loss)
