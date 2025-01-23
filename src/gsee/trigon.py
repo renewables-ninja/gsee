@@ -200,9 +200,7 @@ def _tilt_single_tracking(sun_alt, tilt, azimuth, sun_azimuth):
 
 def aperture_irradiance(
     data,
-    # direct,
-    # diffuse,
-    # coords,
+    coords=None,
     tilt=0,
     azimuth=0,
     tracking=0,
@@ -241,9 +239,14 @@ def aperture_irradiance(
         Solar angles. If default (None), they are computed automatically.
 
     """
+    # Define if the input data is a dataframe or an array
+    is_dataframe = isinstance(data, pd.DataFrame)
+    is_array = isinstance(data, xr.Dataset)
+
     # Temporarily set coords with only the first grid box's longitude and latitude
     # later can adjust to calculate sunrise and angles every 10 degree latitude (?)
-    coords = (data.lat.data[0], data.lon.data[0])
+    if is_array:
+        coords = (data['lat'].values[0], data['lon'].values[0])
 
     # 0. Correct azimuth if we're on southern hemisphere, so that 3.14
     # points north instead of south
@@ -251,22 +254,24 @@ def aperture_irradiance(
         azimuth = azimuth + np.pi
     # 1. Calculate solar angles
     if angles is None:
-        sunrise_set_times = sun_rise_set_times(pd.to_datetime(data.time), coords)
-        angles = sun_angles(pd.to_datetime(data.time), coords, sunrise_set_times)
-        # sunrise_set_times = sun_rise_set_times(direct.index, coords)
-        # angles = sun_angles(direct.index, coords, sunrise_set_times)
+        if is_array:
+            sunrise_set_times = sun_rise_set_times(pd.to_datetime(data.time), coords)
+            angles = sun_angles(pd.to_datetime(data.time), coords, sunrise_set_times)
+        elif is_dataframe:
+            sunrise_set_times = sun_rise_set_times(data.index, coords)
+            angles = sun_angles(data.index, coords, sunrise_set_times)
     # 2. Calculate direct normal irradiance
-    # dni = (direct * (angles["duration"] / 60)) / np.cos(angles["sun_zenith"])
-    # dni = (data.direct_horizontal.data * (angles["duration"] / 60)) / np.cos(
-    #     angles["sun_zenith"]
-    # )
-    dni = (
-        data.direct_horizontal.data
-        * (angles["duration"][:, np.newaxis, np.newaxis] / 60)
-    ) / np.cos(angles["sun_zenith"][:, np.newaxis, np.newaxis])
+    if is_array:
+        dni = (
+            data['direct_horizontal']
+            * (angles["duration"][:, np.newaxis, np.newaxis] / 60)
+        ) / np.cos(angles["sun_zenith"][:, np.newaxis, np.newaxis])
+    elif is_dataframe:
+        dni = (data['direct_horizontal'] * (angles["duration"] / 60)) / np.cos(angles["sun_zenith"])
     if dni_only:
         return dni
     # 3. Calculate appropriate aperture incidence angle
+    # not yet adapted for array data <<<----------------------
     if tracking == 0:
         incidence = _incidence_fixed(
             angles["sun_alt"], tilt, azimuth, angles["sun_azimuth"]
@@ -291,33 +296,22 @@ def aperture_irradiance(
     # 4. Compute direct and diffuse irradiance on plane
     # Clipping ensures that very low panel to sun altitude angles do not
     # result in negative direct irradiance (reflection)
-    plane_direct = dni * np.cos(incidence[:, np.newaxis, np.newaxis])
-    # .fillna(0).clip(lower=0)
-    plane_diffuse = data.diffuse_horizontal.data * (
-        (1 + np.cos(panel_tilt)) / 2
-    ) + albedo * (data.direct_horizontal.data + data.diffuse_horizontal.data) * (
+    plane_diffuse = data['diffuse_horizontal'] * ((1 + np.cos(panel_tilt)) / 2
+    ) + albedo * (data['direct_horizontal'] + data['diffuse_horizontal']) * (
         (1 - np.cos(panel_tilt)) / 2
     )
-    # plane_diffuse = (
-    #     diffuse * ((1 + np.cos(panel_tilt)) / 2)
-    #     + albedo * (direct + diffuse) * ((1 - np.cos(panel_tilt)) / 2)
-    # ).fillna(0)
-    # return pd.DataFrame(
-    #     {
-    #         "direct": clip_arr(plane_direct),
-    #         "diffuse": clip_arr(plane_diffuse),
-    #     }
-    return xr.Dataset(
-        {
-            "direct": xr.DataArray(
-                np.nan_to_num(plane_direct).clip(min=0),
-                dims=data["direct_horizontal"].dims,
-                coords=data["direct_horizontal"].coords,
-            ),
-            "diffuse": xr.DataArray(
-                np.nan_to_num(plane_diffuse).clip(min=0),
-                dims=data["diffuse_horizontal"].dims,
-                coords=data["diffuse_horizontal"].coords,
-            ),
-        }
-    )
+
+    if is_array:
+
+        plane_direct = dni * np.cos(incidence[:, np.newaxis, np.newaxis])
+        return xr.Dataset(
+            {
+                "direct": (("time", "lat", "lon"), np.nan_to_num(plane_direct).clip(min=0)),
+                "diffuse": (("time", "lat", "lon"), np.nan_to_num(plane_diffuse).clip(min=0)),
+            },
+            coords=data.coords,
+        )
+    elif is_dataframe:
+        plane_direct = dni * np.cos(incidence)
+        return pd.DataFrame({"direct": plane_direct.fillna(0).clip(lower=0), 
+                             "diffuse": plane_diffuse.fillna(0).clip(lower=0)})

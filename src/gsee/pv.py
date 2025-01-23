@@ -24,6 +24,7 @@ import warnings
 
 import numpy as np
 import pandas as pd
+import xarray as xr
 import pvlib
 
 from gsee import trigon, cec_tools
@@ -65,7 +66,8 @@ class PVPanel(object):
 
         Parameters
         ----------
-        irradiance : xarray ndarray
+        irradiance : pandas Dataframe or xarray ndarray
+            with columns/variables 'direct' and 'diffuse' irradiance in W/m2.
             Incident irradiance hitting the panel(s) in W/m2.
         tamb : xarray ndarray, default None
             Ambient temperature in deg C. If not given, R_TAMB is used
@@ -73,7 +75,10 @@ class PVPanel(object):
 
         """
         if tamb is not None:
-            assert irradiance.time.equals(tamb.time), "Data indices must match"
+            if isinstance(irradiance, pd.Series):
+                assert irradiance.index.equals(tamb.index), "Data indices must match"
+            elif isinstance(irradiance, xr.DataArray):
+                assert irradiance.time.equals(tamb.time), "Data indices must match"
         return (
             irradiance
             * self.panel_aperture
@@ -199,9 +204,11 @@ class HuldPanel(PVPanel):
                 + T_ * (self.k_3 + self.k_4 * np.log(G_) + self.k_5 * (np.log(G_)) ** 2)
                 + self.k_6 * (T_**2)
             )
-        # eff.fillna(0, inplace=True)  # NaNs in case that G_ was <= 0
-        # eff[eff < 0] = 0  # Also make sure efficiency can't be negative
-        eff.data = np.nan_to_num(eff.data).clip(min=0)
+        try:
+            eff.data = np.nan_to_num(eff.data).clip(min=0)
+        except AttributeError:
+            eff.fillna(0, inplace=True)  # NaNs in case that G_ was <= 0
+            eff[eff < 0] = 0  # Also make sure efficiency can't be negative
         return eff
 
 
@@ -310,11 +317,11 @@ class Inverter(object):
 
 def run_model(
     data,
-    # coords,
     tilt,
     azim,
     tracking,
     capacity,
+    coords=None,
     inverter_capacity=None,
     use_inverter=True,
     technology="csi",
@@ -328,10 +335,11 @@ def run_model(
 
     Parameters
     ----------
-    data : pandas DataFrame
-        Must contain columns 'direct_horizontal' and 'diffuse_horizontal (in W/m2), and may contain a 'temperature' column
-        for ambient air temperature (in deg C).
-    coords : (float, float) tuple
+    data : pandas DataFrame or xarray Dataset
+        Must contain columns 'direct_horizontal' and 'diffuse_horizontal (in W/m2), 
+        may contain a 'temperature' column for ambient air temperature (in deg C).
+        if xarray Dataset, must have ('time', 'lat', 'lon') dimensions.
+    coords : if dataframe, (float, float) tuple
         Latitude and longitude.
     tilt : float
         Tilt angle (degrees).
@@ -366,29 +374,32 @@ def run_model(
     if (system_loss < 0) or (system_loss > 1):
         raise ValueError("system_loss must be >=0 and <=1")
 
+    # Define if the input data is a dataframe or an array
+    is_dataframe = isinstance(data, pd.DataFrame)
+    is_array = isinstance(data, xr.Dataset)
+
     # NB: aperture_irradiance expects azim/tilt in radians!
     irrad = trigon.aperture_irradiance(
         data,
-        # data.direct_horizontal,
-        # data.diffuse_horizontal,
-        # coords,
+        coords=coords,
         tracking=tracking,
         azimuth=math.radians(azim),
         tilt=math.radians(tilt),
         angles=angles,
     )
-    # datetimes = irrad.index
-    datetimes = irrad.time
+    try:
+        datetimes = irrad.time
+    except AttributeError:
+        datetimes = data.index
 
     # Temperature, if it was given
-    # if "temperature" in data.columns:
-    #     tamb = data["temperature"]
-    # else:
-    #     tamb = pd.Series(R_TAMB, index=datetimes)
-    if "temperature" in data.variables:
+    try:
         tamb = data["temperature"]
-    else:
-        tamb = np.full(data["direct_horizontal"].shape, R_TAMB)
+    except KeyError:
+        try:
+            tamb = np.full(data["direct_horizontal"].shape, R_TAMB)
+        except AttributeError:
+            tamb = pd.Series(R_TAMB, index=datetimes)
 
     # Set up the panel model
     # NB: panel efficiency is not used here, but we retain the possibility
@@ -405,8 +416,8 @@ def run_model(
     )
 
     # Run the panel model and return output
-    irradiance = irrad.direct + irrad.diffuse
-    dc_out = panel.panel_power(irradiance, tamb).clip(max=capacity)
+    irradiance = irrad['direct'] + irrad['diffuse']
+    dc_out = panel.panel_power(irradiance, tamb)
     # dc_out.data[dc_out.data >= capacity] = capacity
     # output = panel.panel_power(irradiance, tamb)
     # dc_out = pd.Series(output, index=datetimes).clip(upper=capacity)
@@ -416,23 +427,30 @@ def run_model(
 
     if use_inverter:
         inverter = Inverter(inverter_capacity)
-        # ac_out = dc_out.apply(inverter.ac_output).clip(lower=0)
-        ac_out = inverter.ac_output_arr(dc_out).clip(min=0)
+        if is_array:
+            ac_out = inverter.ac_output_arr(dc_out.clip(max=capacity)).clip(min=0)
+        elif is_dataframe:
+            dc_out = pd.Series(dc_out.clip(upper=capacity), index=datetimes)
+            ac_out = dc_out.apply(inverter.ac_output).clip(lower=0)
         ac_out_final = ac_out * (1 - system_loss)
     else:
         ac_out_final = dc_out * (1 - system_loss)
 
+    # is this include_raw_data necessary? <<<--------------------------
     if include_raw_data:
         return pd.DataFrame.from_dict(
             {
                 "output": ac_out_final,
-                "direct": irrad.direct,
-                "diffuse": irrad.diffuse,
+                "direct": irrad['direct'],
+                "diffuse": irrad['diffuse'],
                 "temperature": tamb,
             }
         )
     else:
-        return ac_out_final
+        if is_array:
+            return ac_out_final.to_dataset(name="ac_out")
+        elif is_dataframe:
+            return ac_out_final
 
 
 def optimal_tilt(lat):
