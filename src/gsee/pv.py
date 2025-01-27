@@ -336,7 +336,7 @@ def run_model(
     Parameters
     ----------
     data : pandas DataFrame or xarray Dataset
-        Must contain columns 'direct_horizontal' and 'diffuse_horizontal (in W/m2), 
+        Must contain columns 'direct_horizontal' and 'diffuse_horizontal (in W/m2),
         may contain a 'temperature' column for ambient air temperature (in deg C).
         if xarray Dataset, must have ('time', 'lat', 'lon') dimensions.
     coords : if dataframe, (float, float) tuple
@@ -416,11 +416,8 @@ def run_model(
     )
 
     # Run the panel model and return output
-    irradiance = irrad['direct'] + irrad['diffuse']
+    irradiance = irrad["direct"] + irrad["diffuse"]
     dc_out = panel.panel_power(irradiance, tamb)
-    # dc_out.data[dc_out.data >= capacity] = capacity
-    # output = panel.panel_power(irradiance, tamb)
-    # dc_out = pd.Series(output, index=datetimes).clip(upper=capacity)
 
     if inverter_capacity is None:
         inverter_capacity = capacity
@@ -441,8 +438,8 @@ def run_model(
         return pd.DataFrame.from_dict(
             {
                 "output": ac_out_final,
-                "direct": irrad['direct'],
-                "diffuse": irrad['diffuse'],
+                "direct": irrad["direct"],
+                "diffuse": irrad["diffuse"],
                 "temperature": tamb,
             }
         )

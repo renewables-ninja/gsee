@@ -6,9 +6,8 @@ Using trigonometry (Lambert's cosine law, etc).
 
 """
 
-import datetime
-
 import ephem
+import datetime
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -135,6 +134,51 @@ def sun_angles(datetime_index, coords, rise_set_times=None):
     return df
 
 
+def get_sun_angles_from_coarser_dataset(ds_input):
+    """
+    Get sun_angles from a pre-calculated coarser global dataset for 2012
+    with the nearest method to save computational time
+    A sensitivity test concerning the effect of using a single year for tilt angle
+    calculation yields a small difference of 0.35% (Christopher Frank PhD thesis, 2019).
+
+    Parameters
+    ----------
+    ds_input: xarray dataset with desired dimensions (time, lat, lon) and shape for the output
+
+    Return
+    ----------
+    Dataset with `sun_alt`, `sun_azimuth`, `duration`, `sun_zenith` values from ds_global
+    and dimensions from ds_input
+
+    """
+    global_sun_angles = xr.open_dataset("../data/sun_angles_global_2012.nc")
+    _angles = xr.Dataset(
+        coords={
+            "time": ds_input["time"],
+            "lat": ds_input["lat"],
+            "lon": ds_input["lon"],
+        }
+    )
+    _year = 2012
+    _time_with_replaced_year = [
+        pd.to_datetime(x).replace(year=_year) for x in _angles["time"].values
+    ]
+    for var in list(global_sun_angles.keys()):
+        _angles[var] = xr.DataArray(
+            global_sun_angles[var]
+            .sel(
+                time=_time_with_replaced_year,
+                lat=_angles["lat"],
+                lon=_angles["lon"],
+                method="nearest",
+            )
+            .values,
+            dims=["time", "lat", "lon"],
+        )
+
+    return _angles
+
+
 def _incidence_fixed(sun_alt, tilt, azimuth, sun_azimuth):
     """Returns incidence angle for a fixed panel"""
     return np.arccos(
@@ -243,35 +287,27 @@ def aperture_irradiance(
     is_dataframe = isinstance(data, pd.DataFrame)
     is_array = isinstance(data, xr.Dataset)
 
-    # Temporarily set coords with only the first grid box's longitude and latitude
-    # later can adjust to calculate sunrise and angles every 10 degree latitude (?)
-    if is_array:
-        coords = (data['lat'].values[0], data['lon'].values[0])
-
-    # 0. Correct azimuth if we're on southern hemisphere, so that 3.14
-    # points north instead of south
-    if coords[0] < 0:
-        azimuth = azimuth + np.pi
     # 1. Calculate solar angles
     if angles is None:
         if is_array:
-            sunrise_set_times = sun_rise_set_times(pd.to_datetime(data.time), coords)
-            angles = sun_angles(pd.to_datetime(data.time), coords, sunrise_set_times)
+            angles = get_sun_angles_from_coarser_dataset(data)
         elif is_dataframe:
+            # 0. Correct azimuth if we're on southern hemisphere, so that 3.14
+            # points north instead of south
+            # not yet for array data <<<-------------------------
+            if coords[0] < 0:
+                azimuth = azimuth + np.pi
+
             sunrise_set_times = sun_rise_set_times(data.index, coords)
             angles = sun_angles(data.index, coords, sunrise_set_times)
     # 2. Calculate direct normal irradiance
-    if is_array:
-        dni = (
-            data['direct_horizontal']
-            * (angles["duration"][:, np.newaxis, np.newaxis] / 60)
-        ) / np.cos(angles["sun_zenith"][:, np.newaxis, np.newaxis])
-    elif is_dataframe:
-        dni = (data['direct_horizontal'] * (angles["duration"] / 60)) / np.cos(angles["sun_zenith"])
+    dni = (data["direct_horizontal"] * (angles["duration"] / 60)) / np.cos(
+        angles["sun_zenith"]
+    )
+
     if dni_only:
         return dni
     # 3. Calculate appropriate aperture incidence angle
-    # not yet adapted for array data <<<----------------------
     if tracking == 0:
         incidence = _incidence_fixed(
             angles["sun_alt"], tilt, azimuth, angles["sun_azimuth"]
@@ -296,22 +332,31 @@ def aperture_irradiance(
     # 4. Compute direct and diffuse irradiance on plane
     # Clipping ensures that very low panel to sun altitude angles do not
     # result in negative direct irradiance (reflection)
-    plane_diffuse = data['diffuse_horizontal'] * ((1 + np.cos(panel_tilt)) / 2
-    ) + albedo * (data['direct_horizontal'] + data['diffuse_horizontal']) * (
+    plane_diffuse = data["diffuse_horizontal"] * (
+        (1 + np.cos(panel_tilt)) / 2
+    ) + albedo * (data["direct_horizontal"] + data["diffuse_horizontal"]) * (
         (1 - np.cos(panel_tilt)) / 2
     )
+    plane_direct = dni * np.cos(incidence)
 
     if is_array:
-
-        plane_direct = dni * np.cos(incidence[:, np.newaxis, np.newaxis])
         return xr.Dataset(
             {
-                "direct": (("time", "lat", "lon"), np.nan_to_num(plane_direct).clip(min=0)),
-                "diffuse": (("time", "lat", "lon"), np.nan_to_num(plane_diffuse).clip(min=0)),
+                "direct": (
+                    ("time", "lat", "lon"),
+                    np.nan_to_num(plane_direct).clip(min=0),
+                ),
+                "diffuse": (
+                    ("time", "lat", "lon"),
+                    np.nan_to_num(plane_diffuse).clip(min=0),
+                ),
             },
             coords=data.coords,
         )
     elif is_dataframe:
-        plane_direct = dni * np.cos(incidence)
-        return pd.DataFrame({"direct": plane_direct.fillna(0).clip(lower=0), 
-                             "diffuse": plane_diffuse.fillna(0).clip(lower=0)})
+        return pd.DataFrame(
+            {
+                "direct": plane_direct.fillna(0).clip(lower=0),
+                "diffuse": plane_diffuse.fillna(0).clip(lower=0),
+            }
+        )
