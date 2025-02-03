@@ -1,14 +1,16 @@
 """
-Irradiance on an inclined plane
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Time and solar irradiance calculations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Using trigonometry (Lambert's cosine law, etc).
+Legacy code directly uses the `ephem` library, as of 2025 also includes
+use of `pvlib` which implements additional algorithms such as SPA.
 
 """
 
 import datetime
 
 import ephem
+import pvlib
 import numpy as np
 import pandas as pd
 
@@ -39,7 +41,27 @@ def _get_rise_and_set_time(date, sun, obs):
     return (rise_time, set_time)
 
 
+def _daily_dtindex(datetime_index):
+    return pd.DatetimeIndex(datetime_index.to_series().map(pd.Timestamp.date).unique())
+
+
 def sun_rise_set_times(datetime_index, coords):
+    """
+    Returns sunrise and set times for the given datetime_index and coords,
+    as a Series indexed by date (days, resampled from the datetime_index).
+
+    `datetime_index` is localized to UTC and assumed to be either in UTC explicitly
+    or implicitly.
+
+    """
+    dtindex = _daily_dtindex(datetime_index)
+    loc = pvlib.location.Location(*coords)
+    result = loc.get_sun_rise_set_transit(dtindex.tz_localize("UTC"), method="spa")
+    result.index = dtindex
+    return result
+
+
+def sun_rise_set_times_ephem(datetime_index, coords):
     """
     Returns sunrise and set times for the given datetime_index and coords,
     as a Series indexed by date (days, resampled from the datetime_index).
@@ -50,17 +72,79 @@ def sun_rise_set_times(datetime_index, coords):
     obs.lat = str(coords[0])
     obs.lon = str(coords[1])
 
-    # Ensure datetime_index is daily
-    dtindex = pd.DatetimeIndex(
-        datetime_index.to_series().map(pd.Timestamp.date).unique()
+    dtindex = _daily_dtindex(datetime_index)
+
+    return pd.DataFrame(
+        [_get_rise_and_set_time(i, sun, obs) for i in dtindex],
+        index=dtindex,
+        columns=["sunrise", "sunset"],
     )
 
-    return pd.Series(
-        [_get_rise_and_set_time(i, sun, obs) for i in dtindex], index=dtindex
+
+def _rise_duration(ts):
+    return 60 - (ts.minute + (ts.second / 60))
+
+
+def _set_duration(ts):
+    return ts.minute + (ts.second / 60)
+
+
+def sun_angles(datetime_index, coords):
+    assert str(datetime_index.tz) == "UTC"
+    # 1. Daily time series of sunrise and sunset times
+    rise_set_times = sun_rise_set_times(datetime_index, coords)
+
+    # 2. Time series with input resolution,
+    # with duration of sunshine + timestamp of midpoint for each time step
+    _DURATIONS = []
+    _MIDPOINT_TIMES = []
+    _INDEXES = []
+
+    def _rise_set_duration_and_index(row):
+        rise_duration = _rise_duration(row["sunrise"])
+        set_duration = _set_duration(row["sunset"])
+        _DURATIONS.append(rise_duration)
+        _DURATIONS.append(set_duration)
+        _MIDPOINT_TIMES.append(
+            row["sunrise"] + pd.Timedelta(rise_duration / 2, unit="m")
+        )
+        _MIDPOINT_TIMES.append(row["sunset"] - pd.Timedelta(set_duration / 2, unit="m"))
+        _INDEXES.append(row["sunrise"].round("H"))
+        _INDEXES.append(row["sunset"].round("H"))
+
+    rise_set_times.apply(_rise_set_duration_and_index, axis=1)
+    duration = pd.DataFrame(
+        {"duration": _DURATIONS, "midpoint": _MIDPOINT_TIMES}, index=_INDEXES
+    ).reindex(datetime_index)
+
+    na_index = duration[duration["duration"].isna()].index
+
+    duration.loc[na_index, "duration"] = 60
+    duration.loc[na_index, "midpoint"] = (
+        duration.loc[na_index, :]
+        .reset_index()["time"]
+        .apply(lambda x: x + pd.Timedelta("30m"))
+        .array
     )
+    midpoint_times_index = pd.Index(duration["midpoint"])
+
+    # 3. Solar positions for each time step midpoint, combined with duration
+    # `get_solarposition` returns a dataframe containing `apparent_zenith`, `zenith`,
+    # `apparent_elevation`, `elevation`, `azimuth`, `equation_of_time`
+    lat, lon = coords
+    angles = pvlib.solarposition.get_solarposition(midpoint_times_index, lat, lon)
+    angles["sun_zenith"] = np.radians(angles["apparent_zenith"])
+    angles["sun_azimuth"] = np.radians(angles["azimuth"])
+    angles["sun_alt"] = np.radians(angles["apparent_elevation"])
+    angles.index = datetime_index  # Set the original index
+    angles["duration"] = duration["duration"]
+    # Relevant properties are set to zero if sun is below horizon
+    angles.loc[angles.sun_alt <= 0, ["duration", "sun_alt"]] = 0
+
+    return angles
 
 
-def sun_angles(datetime_index, coords, rise_set_times=None):
+def sun_angles_legacy(datetime_index, coords):
     """
     Calculates sun angles. Returns a dataframe containing `sun_alt`,
     `sun_zenith`, `sun_azimuth` and `duration` over the passed datetime index.
@@ -89,10 +173,9 @@ def sun_angles(datetime_index, coords, rise_set_times=None):
     sun = ephem.Sun()
 
     # Calculate daily sunrise/sunset times
-    if rise_set_times is None:
-        rise_set_times = sun_rise_set_times(datetime_index, coords)
+    rise_set_times = sun_rise_set_times_ephem(datetime_index, coords)
 
-    # Calculate hourly altitute, azimuth, and sunshine
+    # Calculate hourly altitude, azimuth, and sunshine
     alts = []
     azims = []
     durations = []
@@ -100,7 +183,9 @@ def sun_angles(datetime_index, coords, rise_set_times=None):
     for index, item in enumerate(datetime_index):
         obs.date = item
         # rise/set times are indexed by day, so need to adjust lookup
-        rise_time, set_time = rise_set_times.loc[pd.Timestamp(item.date())]
+        rise_time, set_time = rise_set_times.loc[
+            pd.Timestamp(item.date()), ["sunrise", "sunset"]
+        ]
 
         # Set angles, sun altitude and duration based on hour of day:
         if rise_time is not None and item.hour == rise_time.hour:
@@ -207,6 +292,7 @@ def aperture_irradiance(
     albedo=0.3,
     dni_only=False,
     angles=None,
+    legacy_solarposition=False,
 ):
     """
     Parameters
@@ -241,14 +327,21 @@ def aperture_irradiance(
     # points north instead of south
     if coords[0] < 0:
         azimuth = azimuth + np.pi
+
     # 1. Calculate solar angles
     if angles is None:
-        sunrise_set_times = sun_rise_set_times(direct.index, coords)
-        angles = sun_angles(direct.index, coords, sunrise_set_times)
+        # Returns a dataframe containing `sun_alt`,
+        # `sun_zenith`, `sun_azimuth` and `duration`
+        if legacy_solarposition:
+            angles = sun_angles_legacy(direct.index, coords)
+        else:
+            angles = sun_angles(direct.index, coords)
+
     # 2. Calculate direct normal irradiance
     dni = (direct * (angles["duration"] / 60)) / np.cos(angles["sun_zenith"])
     if dni_only:
         return dni
+
     # 3. Calculate appropriate aperture incidence angle
     if tracking == 0:
         incidence = _incidence_fixed(
@@ -271,6 +364,7 @@ def aperture_irradiance(
         azimuth = angles["sun_azimuth"]
     else:
         raise ValueError("Invalid setting for tracking: {}".format(tracking))
+
     # 4. Compute direct and diffuse irradiance on plane
     # Clipping ensures that very low panel to sun altitude angles do not
     # result in negative direct irradiance (reflection)
@@ -279,4 +373,5 @@ def aperture_irradiance(
         diffuse * ((1 + np.cos(panel_tilt)) / 2)
         + albedo * (direct + diffuse) * ((1 - np.cos(panel_tilt)) / 2)
     ).fillna(0)
+
     return pd.DataFrame({"direct": plane_direct, "diffuse": plane_diffuse})

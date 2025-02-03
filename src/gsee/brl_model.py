@@ -126,7 +126,7 @@ def _daily_diffuse(obs, ks, sunrise, sunset, p=DEFAULT_PARAMS):
                 + p["b3"] * k_day
                 + p["b4"] * psi(hour, ks)
             )
-            d = 1 / (1 + math.e ** pwr)
+            d = 1 / (1 + math.e**pwr)
         values.append(d)
         # Increase obs.date by one hour for the next iteration
         obs.date = obs.date.datetime() + datetime.timedelta(hours=1)
@@ -154,7 +154,7 @@ def run(hourly_clearness, coords, rise_set_times=None):
 
     """
     if rise_set_times is None:
-        rise_set_times = trigon.sun_rise_set_times(hourly_clearness.index, coords)
+        rise_set_times = trigon.sun_rise_set_times_ephem(hourly_clearness.index, coords)
 
     obs = ephem.Observer()
     obs.lat = str(coords[0])
@@ -166,7 +166,7 @@ def run(hourly_clearness, coords, rise_set_times=None):
         ks = hourly_clearness.iloc[i : i + 24].tolist()
         obs.date = hourly_clearness.index[i]
         # These are indexed by day, so need to scale the index
-        sunrise, sunset = rise_set_times[int(i / 24)]
+        sunrise, sunset = rise_set_times.iloc[int(i / 24)].loc[["sunrise", "sunset"]]
         results = _daily_diffuse(obs, ks, sunrise, sunset)
         diffuse_fractions.extend(results)
     return pd.Series(diffuse_fractions, index=hourly_clearness.index)
