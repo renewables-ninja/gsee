@@ -89,12 +89,13 @@ def _set_duration(ts):
     return ts.minute + (ts.second / 60)
 
 
-def sun_angles(datetime_index, coords):
+def sun_angles(datetime_index, coords, rise_set_times=None):
     if str(datetime_index.tz) != "UTC":
         raise ValueError("Input data must be in UTC timezone.")
 
-    # 1. Daily time series of sunrise and sunset times
-    rise_set_times = sun_rise_set_times(datetime_index, coords)
+    if rise_set_times is None:
+        # 1. Daily time series of sunrise and sunset times
+        rise_set_times = sun_rise_set_times(datetime_index, coords)
 
     # 2. Time series with input resolution,
     # with duration of sunshine + timestamp of midpoint for each time step
@@ -147,7 +148,7 @@ def sun_angles(datetime_index, coords):
     return angles
 
 
-def sun_angles_legacy(datetime_index, coords):
+def sun_angles_legacy(datetime_index, coords, rise_set_times=None):
     """
     Calculates sun angles. Returns a dataframe containing `sun_alt`,
     `sun_zenith`, `sun_azimuth` and `duration` over the passed datetime index.
@@ -175,8 +176,9 @@ def sun_angles_legacy(datetime_index, coords):
     obs.lon = str(coords[1])
     sun = ephem.Sun()
 
-    # Calculate daily sunrise/sunset times
-    rise_set_times = sun_rise_set_times_ephem(datetime_index, coords)
+    if rise_set_times is None:
+        # Calculate daily sunrise/sunset times
+        rise_set_times = sun_rise_set_times_ephem(datetime_index, coords)
 
     # Calculate hourly altitude, azimuth, and sunshine
     alts = []
