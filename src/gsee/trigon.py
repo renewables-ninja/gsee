@@ -90,7 +90,9 @@ def _set_duration(ts):
 
 
 def sun_angles(datetime_index, coords):
-    assert str(datetime_index.tz) == "UTC"
+    if str(datetime_index.tz) != "UTC":
+        raise ValueError("Input data must be in UTC timezone.")
+
     # 1. Daily time series of sunrise and sunset times
     rise_set_times = sun_rise_set_times(datetime_index, coords)
 
@@ -109,13 +111,14 @@ def sun_angles(datetime_index, coords):
             row["sunrise"] + pd.Timedelta(rise_duration / 2, unit="m")
         )
         _MIDPOINT_TIMES.append(row["sunset"] - pd.Timedelta(set_duration / 2, unit="m"))
-        _INDEXES.append(row["sunrise"].round("H"))
-        _INDEXES.append(row["sunset"].round("H"))
+        _INDEXES.append(row["sunrise"].floor("H"))
+        _INDEXES.append(row["sunset"].floor("H"))
 
     rise_set_times.apply(_rise_set_duration_and_index, axis=1)
     duration = pd.DataFrame(
         {"duration": _DURATIONS, "midpoint": _MIDPOINT_TIMES}, index=_INDEXES
     ).reindex(datetime_index)
+    duration.index.name = "time"
 
     na_index = duration[duration["duration"].isna()].index
 
