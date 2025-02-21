@@ -328,6 +328,7 @@ def run_model(
     system_loss=0.10,
     angles=None,
     include_raw_data=False,
+    legacy_solarposition=False,
     **kwargs,
 ):
     """
@@ -363,6 +364,11 @@ def run_model(
     include_raw_data : bool, default False
         If true, returns a DataFrame instead of Series which includes
         the input data (panel irradiance and temperature).
+    legacy_solarposition : bool, default False
+        If true, uses the ephem library for solar position calculations. If false, uses
+        `pvlib.solarposition.get_solarposition`. Because of issues with the ephem
+        library, this should only be set to True if required for backwards compatibility
+        or consistency with older simulation runs.
     kwargs : additional kwargs passed on the model constructor
 
     Returns
@@ -371,6 +377,8 @@ def run_model(
         Electric output from PV system in each hour (W).
 
     """
+    data = data.tz_localize("UTC")
+
     if (system_loss < 0) or (system_loss > 1):
         raise ValueError("system_loss must be >=0 and <=1")
 
@@ -386,6 +394,7 @@ def run_model(
         azimuth=math.radians(azim),
         tilt=math.radians(tilt),
         angles=angles,
+        legacy_solarposition=legacy_solarposition,
     )
     try:
         datetimes = irrad.time

@@ -1,4 +1,8 @@
 pandas==1.4.3
 pvlib>=0.10.4,<0.11
-ephem==4.1.6
+# Pin ephem to 4.1.3 until the eternal loop in some calcs is resolved
+# See https://github.com/brandon-rhodes/pyephem/issues/232,
+# https://github.com/brandon-rhodes/pyephem/issues/255,
+# https://github.com/brandon-rhodes/pyephem/issues/258
+ephem==4.1.3
 xarray==2022.6
