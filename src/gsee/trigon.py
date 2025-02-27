@@ -194,6 +194,7 @@ def sun_angles(_ds, rise_set_times=None):
     #     {"duration": _DURATIONS, "midpoint": _MIDPOINT_TIMES}, index=_INDEXES
     # ).reindex(datetime_index)
     duration.index.name = "time"
+    duration.index = duration.index.astype("datetime64[ns]")
 
     na_index = duration[duration["duration"].isna()].index
 
@@ -204,7 +205,7 @@ def sun_angles(_ds, rise_set_times=None):
         .apply(lambda x: x + pd.Timedelta("30m"))
         .array
     )
-    midpoint_times_index = pd.Index(duration["midpoint"])
+    midpoint_times_index = pd.Index(duration["midpoint"]).astype("datetime64[ns]")
 
     # 3. Solar positions for each time step midpoint, combined with duration
     # `get_solarposition` returns a dataframe containing `apparent_zenith`, `zenith`,
@@ -218,7 +219,6 @@ def sun_angles(_ds, rise_set_times=None):
     angles["sun_zenith"] = np.radians(angles["apparent_zenith"])
     angles["sun_azimuth"] = np.radians(angles["azimuth"])
     angles["sun_alt"] = np.radians(angles["apparent_elevation"])
-    # angles.index = datetime_index  # Set the original index
     angles.index = duration.index  # Set the original index
     angles["duration"] = duration["duration"]
     angles["lat"] = duration["lat"]
@@ -226,10 +226,6 @@ def sun_angles(_ds, rise_set_times=None):
     # Relevant properties are set to zero if sun is below horizon
     angles.loc[angles.sun_alt <= 0, ["duration", "sun_alt"]] = 0
     angles = angles.set_index(["lon", "lat"], append=True).to_xarray()
-    angles["time"] = (
-        "time",
-        pd.to_datetime(datetime_index).astype("datetime64[ns]"),
-    )  # make sure the same dimension as _ds input
 
     return angles
 
