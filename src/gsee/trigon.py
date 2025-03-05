@@ -45,62 +45,20 @@ def _daily_dtindex(datetime_index):
     return pd.DatetimeIndex(datetime_index.to_series().map(pd.Timestamp.date).unique())
 
 
-def sun_rise_set_times(_ds):
+def sun_rise_set_times(datetime_index, coords):
     """
-    Parameter
-    ---
-    ds: input xarray dataset, can be in two format
-    1. with three dimensions (lat, lon, time) for gridded data
-    2. with two dimensions (ID, time) with ID can be (sub)country code, e.g., alpha-2
-    with additional two variables with one dimension ID: lat(ID) and lon(ID)
+    Returns sunrise and set times for the given datetime_index and coords,
+    as a Series indexed by date (days, resampled from the datetime_index).
 
-    Return
-    ---
-    xarray dataset with sunrise and sunset times, daily from the input ds
-    with the same dimensions as the input dataset
+    `datetime_index` is localized to UTC and assumed to be either in UTC explicitly
+    or implicitly.
 
     """
-
-    # get list of locations (pair of coordinations) and get their sunrise and sunset times
-    date_values = pd.DatetimeIndex(
-        _ds["time"].to_series().map(pd.Timestamp.date).unique()
-    )
-    lat_values = _ds["lat"].values
-    lon_values = _ds["lon"].values
-
-    if "lat" and "lon" in _ds.to_dict()["coords"].keys():
-        coords = [(x, y) for x in lat_values for y in lon_values]
-    elif "ID" in _ds.to_dict()["data_vars"].keys():
-        coords = [(x, y) for x, y in zip(lat_values, lon_values)]
-    else:
-        raise ValueError("lat and lon data must be in dimension or variable")
-
-    result = []
-    for lat, lon in coords:
-        loc = pvlib.location.Location(lat, lon)
-        _tmp = loc.get_sun_rise_set_transit(
-            date_values.tz_localize("UTC"), method="spa"
-        )
-        _tmp["lat"] = lat
-        _tmp["lon"] = lon
-        result.append(_tmp)
-    return pd.concat(result).reset_index(drop=True)
-
-
-# def sun_rise_set_times(datetime_index, coords):
-#     """
-#     Returns sunrise and set times for the given datetime_index and coords,
-#     as a Series indexed by date (days, resampled from the datetime_index).
-
-#     `datetime_index` is localized to UTC and assumed to be either in UTC explicitly
-#     or implicitly.
-
-#     """
-#     dtindex = _daily_dtindex(datetime_index)
-#     loc = pvlib.location.Location(*coords)
-#     result = loc.get_sun_rise_set_transit(dtindex.tz_localize("UTC"), method="spa")
-#     result.index = dtindex
-#     return result
+    dtindex = _daily_dtindex(datetime_index)
+    loc = pvlib.location.Location(*coords)
+    result = loc.get_sun_rise_set_transit(dtindex.tz_localize("UTC"), method="spa")
+    result.index = dtindex
+    return result
 
 
 def sun_rise_set_times_ephem(datetime_index, coords):
@@ -131,16 +89,14 @@ def _set_duration(ts):
     return ts.minute + (ts.second / 60)
 
 
-def sun_angles(_ds, rise_set_times=None):
-    # xarray inpute time is assumed to be UTC naive
-    datetime_index = pd.Index(_ds["time"], tz="UTC")
+def sun_angles(datetime_index, coords, rise_set_times=None):
 
     # if str(datetime_index.tz) != "UTC":
     #     raise ValueError("Input data must be in UTC timezone.")
 
     if rise_set_times is None:
         # 1. Daily time series of sunrise and sunset times
-        rise_set_times = sun_rise_set_times(_ds)
+        rise_set_times = sun_rise_set_times(datetime_index, coords)
 
     # 2. Dataframe with duration of sunshine + timestamp of midpoint
     # for each time step and each data point (lat, lon)
@@ -155,55 +111,29 @@ def sun_angles(_ds, rise_set_times=None):
 
     duration = (
         pd.wide_to_long(
-            rise_set_times.drop(["transit", "sunrise", "sunset"], axis=1),
+            rise_set_times,
             stubnames=["duration", "midpoint"],
-            i=["lat", "lon"],
+            i=["transit", "sunrise", "sunset"],
             j="drop",
             sep="_",
             suffix=r"\w+",
         )
         .reset_index(drop=False)
-        .drop("drop", axis=1)
+        .drop(["transit", "sunrise", "sunset", "drop"], axis=1)
     )
-    duration["time"] = duration["midpoint"].dt.floor("H")
-    duration = duration.set_index(["lat", "lon", "time"]).unstack(level=[0, 1])
-    duration = (
-        duration.reindex(datetime_index, fill_value=np.nan)
-        .stack(level=[1, 2], dropna=False)
-        .reset_index(drop=False)
-    ).set_index("level_0")
 
-    # _DURATIONS = []
-    # _MIDPOINT_TIMES = []
-    # _INDEXES = []
-
-    # def _rise_set_duration_and_index(row):
-    #     rise_duration = _rise_duration(row["sunrise"])
-    #     set_duration = _set_duration(row["sunset"])
-    #     _DURATIONS.append(rise_duration)
-    #     _DURATIONS.append(set_duration)
-    #     _MIDPOINT_TIMES.append(
-    #         row["sunrise"] + pd.Timedelta(rise_duration / 2, unit="m")
-    #     )
-    #     _MIDPOINT_TIMES.append(row["sunset"] - pd.Timedelta(set_duration / 2, unit="m"))
-    #     _INDEXES.append(row["sunrise"].floor("H"))
-    #     _INDEXES.append(row["sunset"].floor("H"))
-
-    # rise_set_times.apply(_rise_set_duration_and_index, axis=1)
-    # duration = pd.DataFrame(
-    #     {"duration": _DURATIONS, "midpoint": _MIDPOINT_TIMES}, index=_INDEXES
-    # ).reindex(datetime_index)
-    duration.index.name = "time"
-    duration.index = duration.index.astype("datetime64[ns]")
-
-    na_index = duration[duration["duration"].isna()].index
-
-    duration.loc[na_index, "duration"] = 60
-    duration.loc[na_index, "midpoint"] = (
-        duration.loc[na_index, :]
-        .reset_index()["time"]
-        .apply(lambda x: x + pd.Timedelta("30m"))
-        .array
+    # fill in the other time steps with default values (60 min)
+    duration["time"] = pd.Index(
+        duration["midpoint"].dt.floor("H"), tz="UTC"
+    )  # .astype("datetime64[ns]")
+    duration = duration.set_index("time").combine_first(
+        pd.DataFrame(
+            {
+                "time": pd.Index(datetime_index, tz="UTC"),
+                "duration": [60] * len(datetime_index),
+                "midpoint": datetime_index + pd.Timedelta(minutes=30),
+            }
+        ).set_index("time")
     )
     midpoint_times_index = pd.Index(duration["midpoint"]).astype("datetime64[ns]")
 
@@ -211,23 +141,18 @@ def sun_angles(_ds, rise_set_times=None):
     # `get_solarposition` returns a dataframe containing `apparent_zenith`, `zenith`,
     # `apparent_elevation`, `elevation`, `azimuth`, `equation_of_time`
 
-    # lat, lon = coords
-    # angles = pvlib.solarposition.get_solarposition(midpoint_times_index, lat, lon)
     angles = pvlib.solarposition.get_solarposition(
-        midpoint_times_index, duration["lat"], duration["lon"]
+        midpoint_times_index, *coords
     ).reset_index(drop=False)
     angles["sun_zenith"] = np.radians(angles["apparent_zenith"])
     angles["sun_azimuth"] = np.radians(angles["azimuth"])
     angles["sun_alt"] = np.radians(angles["apparent_elevation"])
     angles.index = duration.index  # Set the original index
     angles["duration"] = duration["duration"]
-    angles["lat"] = duration["lat"]
-    angles["lon"] = duration["lon"]
     # Relevant properties are set to zero if sun is below horizon
     angles.loc[angles.sun_alt <= 0, ["duration", "sun_alt"]] = 0
-    angles = angles.set_index(["lon", "lat"], append=True).to_xarray()
 
-    return angles
+    return angles[["sun_alt", "sun_azimuth", "sun_zenith", "duration"]]
 
 
 def sun_angles_legacy(datetime_index, coords, rise_set_times=None):
@@ -470,7 +395,32 @@ def aperture_irradiance(
                 angles = sun_angles_legacy(data.index, coords)
             else:
                 # angles = sun_angles(data.index, coords)
-                angles = sun_angles(data)
+                lat_values = data["lat"].values
+                lon_values = data["lon"].values
+
+                dict_sun_angles = {}
+
+                if "lat" and "lon" in data.to_dict()["coords"].keys():
+                    coords = [(x, y) for x in lat_values for y in lon_values]
+                    for coord in coords:
+                        dict_sun_angles[coord] = sun_angles(data["time"], coord)
+                    angles = pd.concat(dict_sun_angles)
+                    angles.index = angles.index.rename(["lat", "lon", "time"])
+
+                elif "ID" in data.to_dict()["coords"].keys():
+                    coords = [(x, y) for x, y in zip(lat_values, lon_values)]
+                    ID_list = data["ID"].values
+                    for idx, coord in enumerate(coords):
+                        dict_sun_angles[ID_list[idx]] = sun_angles(data["time"], coord)
+                    angles = pd.concat(dict_sun_angles)
+                    angles.index = angles.index.rename(["ID", "time"])
+
+                else:
+                    raise ValueError(
+                        "lat and lon data must be in dimension or variable"
+                    )
+                angles = angles.to_xarray()
+                angles["time"] = angles["time"].astype("datetime64[ns]")
 
     # 2. Calculate direct normal irradiance
     dni = (data["direct_horizontal"] * (angles["duration"] / 60)) / np.cos(
@@ -523,11 +473,11 @@ def aperture_irradiance(
     return xr.Dataset(
         {
             "direct": (
-                ("time", "lat", "lon"),
+                data.dims,
                 np.nan_to_num(plane_direct).clip(min=0),
             ),
             "diffuse": (
-                ("time", "lat", "lon"),
+                data.dims,
                 np.nan_to_num(plane_diffuse).clip(min=0),
             ),
         },
