@@ -395,8 +395,11 @@ def aperture_irradiance(
                 angles = sun_angles_legacy(data.index, coords)
             else:
                 # angles = sun_angles(data.index, coords)
-                lat_values = data["lat"].values
-                lon_values = data["lon"].values
+                try:
+                    lat_values = data["lat"].values
+                    lon_values = data["lon"].values
+                except KeyError:
+                    raise KeyError("lat and lon data must be in dimension or variable")
 
                 dict_sun_angles = {}
 
@@ -415,10 +418,6 @@ def aperture_irradiance(
                     angles = pd.concat(dict_sun_angles)
                     angles.index = angles.index.rename(["ID", "time"])
 
-                else:
-                    raise ValueError(
-                        "lat and lon data must be in dimension or variable"
-                    )
                 angles = angles.to_xarray()
                 angles["time"] = angles["time"].astype("datetime64[ns]")
 
