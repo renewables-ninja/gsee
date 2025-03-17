@@ -57,7 +57,7 @@ def sun_rise_set_times(datetime_index, coords):
     dtindex = _daily_dtindex(datetime_index)
     loc = pvlib.location.Location(*coords)
     result = loc.get_sun_rise_set_transit(dtindex.tz_localize("UTC"), method="spa")
-    result.index = dtindex
+    result.index = dtindex.tz_localize("UTC")
     return result
 
 
@@ -96,6 +96,8 @@ def sun_angles(datetime_index, coords, rise_set_times=None):
     if rise_set_times is None:
         # 1. Daily time series of sunrise and sunset times
         rise_set_times = sun_rise_set_times(datetime_index, coords)
+    elif str(rise_set_times.index.tz) != "UTC":
+        raise ValueError("rise_set_times must be in UTC timezone.")
 
     # 2. Time series with input resolution,
     # with duration of sunshine + timestamp of midpoint for each time step

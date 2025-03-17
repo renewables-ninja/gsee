@@ -349,7 +349,9 @@ def run_model(
         Electric output from PV system in each hour (W).
 
     """
-    data = data.tz_localize("UTC")
+
+    # FIXME: ensure that `data` and `angles` if given are both in the same time zone
+    # data = data.tz_localize("UTC")
 
     if (system_loss < 0) or (system_loss > 1):
         raise ValueError("system_loss must be >=0 and <=1")
