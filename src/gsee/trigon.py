@@ -118,9 +118,13 @@ def sun_angles(datetime_index, coords, rise_set_times=None):
         _INDEXES.append(row["sunset"].floor("H"))
 
     rise_set_times.apply(_rise_set_duration_and_index, axis=1)
-    duration = pd.DataFrame(
-        {"duration": _DURATIONS, "midpoint": _MIDPOINT_TIMES}, index=_INDEXES
-    ).reindex(datetime_index)
+    duration = (
+        pd.DataFrame(
+            {"duration": _DURATIONS, "midpoint": _MIDPOINT_TIMES}, index=_INDEXES
+        )
+        .dropna()  # Drop where sun never rises or sets (NaN value with NaT index)
+        .reindex(datetime_index)
+    )
     duration.index.name = "time"
 
     na_index = duration[duration["duration"].isna()].index
