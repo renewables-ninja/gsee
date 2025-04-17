@@ -81,75 +81,63 @@ def sun_rise_set_times_ephem(datetime_index, coords):
     )
 
 
-def _rise_duration(ts):
-    return 60 - (ts.minute + (ts.second / 60))
-
-
-def _set_duration(ts):
-    return ts.minute + (ts.second / 60)
-
-
-def sun_angles(datetime_index, coords, rise_set_times=None):
-    if str(datetime_index.tz) != "UTC":
+def sun_angles(dt_index, coords, rise_set_times=None):
+    if str(dt_index.tz) != "UTC":
         raise ValueError("Input data must be in UTC timezone.")
 
-    if rise_set_times is None:
-        # 1. Daily time series of sunrise and sunset times
-        rise_set_times = sun_rise_set_times(datetime_index, coords)
-    elif str(rise_set_times.index.tz) != "UTC":
-        raise ValueError("rise_set_times must be in UTC timezone.")
-
-    # 2. Time series with input resolution,
-    # with duration of sunshine + timestamp of midpoint for each time step
-    _DURATIONS = []
-    _MIDPOINT_TIMES = []
-    _INDEXES = []
-
-    def _rise_set_duration_and_index(row):
-        rise_duration = _rise_duration(row["sunrise"])
-        set_duration = _set_duration(row["sunset"])
-        _DURATIONS.append(rise_duration)
-        _DURATIONS.append(set_duration)
-        _MIDPOINT_TIMES.append(
-            row["sunrise"] + pd.Timedelta(rise_duration / 2, unit="m")
-        )
-        _MIDPOINT_TIMES.append(row["sunset"] - pd.Timedelta(set_duration / 2, unit="m"))
-        _INDEXES.append(row["sunrise"].floor("H"))
-        _INDEXES.append(row["sunset"].floor("H"))
-
-    rise_set_times.apply(_rise_set_duration_and_index, axis=1)
-    duration = (
-        pd.DataFrame(
-            {"duration": _DURATIONS, "midpoint": _MIDPOINT_TIMES}, index=_INDEXES
-        )
-        .dropna()  # Drop where sun never rises or sets (NaN value with NaT index)
-        .reindex(datetime_index)
-    )
-    duration.index.name = "time"
-
-    na_index = duration[duration["duration"].isna()].index
-
-    duration.loc[na_index, "duration"] = 60
-    duration.loc[na_index, "midpoint"] = (
-        duration.loc[na_index, :]
-        .reset_index()["time"]
-        .apply(lambda x: x + pd.Timedelta("30m"))
-        .array
-    )
-    midpoint_times_index = pd.Index(duration["midpoint"])
-
-    # 3. Solar positions for each time step midpoint, combined with duration
-    # `get_solarposition` returns a dataframe containing `apparent_zenith`, `zenith`,
-    # `apparent_elevation`, `elevation`, `azimuth`, `equation_of_time`
     lat, lon = coords
-    angles = pvlib.solarposition.get_solarposition(midpoint_times_index, lat, lon)
+
+    dt_index.freq = pd.infer_freq(dt_index)
+    shift_freq = dt_index.freq / 2
+    shifted_index = dt_index.shift(freq=shift_freq)
+
+    angles = pvlib.solarposition.get_solarposition(shifted_index, lat, lon)
+
+    if rise_set_times is None:
+        rise_set_times = sun_rise_set_times(dt_index, coords)
+
+    sunrises = pd.Series(
+        rise_set_times["sunrise"].dropna().array,
+        index=rise_set_times["sunrise"]
+        .dropna()
+        .apply(lambda x: x.floor(dt_index.freq))
+        .array,
+    )
+    sunsets = pd.Series(
+        rise_set_times["sunset"].dropna().array,
+        index=rise_set_times["sunset"]
+        .dropna()
+        .apply(lambda x: x.floor(dt_index.freq))
+        .array,
+    )
+
+    angles.index = dt_index  # Set the original index
+
+    angles["sunrise"] = sunrises
+    angles["sunset"] = sunsets
+
+    # risen_fraction for sunrise and sunset timesteps
+    angles["risen_fraction"] = (
+        1 - ((angles["sunrise"] - angles.index) / pd.Timedelta(dt_index.freq))
+    ).add((angles["sunset"] - angles.index) / pd.Timedelta(dt_index.freq), fill_value=0)
+
+    # risen_fraction is 1 where sun is above horizon outside of sunrise/sunset timesteps
+    angles.loc[
+        (angles.apparent_elevation > 0) & (angles.risen_fraction.isnull()),
+        "risen_fraction",
+    ] = 1
+
+    # FIXME: if the sun's center does not rise above horizon,
+    # we may be between sunrise and sunset events but the apparent_elevation is just below zero
+    # For now, we set the rise_fraction in those cases to zero,
+    # although there would be a very small non-zero irradiance
+    # Some of these cases might be caught by re-calculating angles in sunrise/sunset hours
+    # with the actual timestamp midpoint
+    angles.loc[angles.apparent_elevation <= 0, "risen_fraction"] = 0
+
     angles["sun_zenith"] = np.radians(angles["apparent_zenith"])
     angles["sun_azimuth"] = np.radians(angles["azimuth"])
     angles["sun_alt"] = np.radians(angles["apparent_elevation"])
-    angles.index = datetime_index  # Set the original index
-    angles["duration"] = duration["duration"]
-    # Relevant properties are set to zero if sun is below horizon
-    angles.loc[angles.sun_alt <= 0, ["duration", "sun_alt"]] = 0
 
     return angles
 
@@ -341,15 +329,21 @@ def aperture_irradiance(
 
     # 1. Calculate solar angles
     if angles is None:
-        # Returns a dataframe containing `sun_alt`,
-        # `sun_zenith`, `sun_azimuth` and `duration`
         if legacy_solarposition:
+            # Returns a dataframe containing `sun_alt`,
+            # `sun_zenith`, `sun_azimuth` and `duration`
             angles = sun_angles_legacy(direct.index, coords)
         else:
+            # Returns a dataframe containing `sun_alt`,
+            # `sun_zenith`, `sun_azimuth` and `risen_fraction`
             angles = sun_angles(direct.index, coords)
 
     # 2. Calculate direct normal irradiance
-    dni = (direct * (angles["duration"] / 60)) / np.cos(angles["sun_zenith"])
+    if "duration" in angles.columns:
+        dni = (direct * (angles["duration"] / 60)) / np.cos(angles["sun_zenith"])
+    else:
+        dni = (direct * angles["risen_fraction"]) / np.cos(angles["sun_zenith"])
+
     if dni_only:
         return dni
 
