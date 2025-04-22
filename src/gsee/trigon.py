@@ -111,6 +111,10 @@ def sun_angles(dt_index, coords, rise_set_times=None):
         .array,
     )
 
+    # In rare cases there are duplicate sunrises/sunsets
+    sunsets = sunsets[~sunsets.index.duplicated(keep="first")]
+    sunrises = sunrises[~sunrises.index.duplicated(keep="first")]
+
     angles.index = dt_index  # Set the original index
 
     angles["sunrise"] = sunrises
