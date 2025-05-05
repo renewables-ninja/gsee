@@ -88,6 +88,7 @@ def sun_angles(dt_index, coords, rise_set_times=None):
     lat, lon = coords
 
     dt_index.freq = pd.infer_freq(dt_index)
+    dt_index_freq = dt_index.freq
     shift_freq = dt_index.freq / 2
     shifted_index = dt_index.shift(freq=shift_freq)
 
@@ -100,14 +101,14 @@ def sun_angles(dt_index, coords, rise_set_times=None):
         rise_set_times["sunrise"].dropna().array,
         index=rise_set_times["sunrise"]
         .dropna()
-        .apply(lambda x: x.floor(dt_index.freq))
+        .apply(lambda x: x.floor(dt_index_freq))
         .array,
     )
     sunsets = pd.Series(
         rise_set_times["sunset"].dropna().array,
         index=rise_set_times["sunset"]
         .dropna()
-        .apply(lambda x: x.floor(dt_index.freq))
+        .apply(lambda x: x.floor(dt_index_freq))
         .array,
     )
 
@@ -122,8 +123,8 @@ def sun_angles(dt_index, coords, rise_set_times=None):
 
     # risen_fraction for sunrise and sunset timesteps
     angles["risen_fraction"] = (
-        1 - ((angles["sunrise"] - angles.index) / pd.Timedelta(dt_index.freq))
-    ).add((angles["sunset"] - angles.index) / pd.Timedelta(dt_index.freq), fill_value=0)
+        1 - ((angles["sunrise"] - angles.index) / pd.Timedelta(dt_index_freq))
+    ).add((angles["sunset"] - angles.index) / pd.Timedelta(dt_index_freq), fill_value=0)
 
     # risen_fraction is 1 where sun is above horizon outside of sunrise/sunset timesteps
     angles.loc[
@@ -131,12 +132,24 @@ def sun_angles(dt_index, coords, rise_set_times=None):
         "risen_fraction",
     ] = 1
 
+    # Recalculate angles for actual midpoint in sunrise timesteps
+    d_sunrise = angles[angles.sunrise.notnull()]["sunrise"]
+    next_step = d_sunrise.dt.floor(dt_index_freq) + dt_index_freq
+    sunrise_recalc = d_sunrise + (next_step - d_sunrise) / 2
+    new_sunrise_angles = pvlib.solarposition.get_solarposition(sunrise_recalc, lat, lon)
+    angles.loc[d_sunrise.index, new_sunrise_angles.columns] = new_sunrise_angles.values
+
+    # Recalculate angles for actual midpoint in sunset timesteps
+    d_sunset = angles[angles.sunset.notnull()]["sunset"]
+    prev_step = d_sunset.dt.floor(dt_index_freq)
+    sunset_recalc = prev_step + (d_sunset - prev_step) / 2
+    new_sunset_angles = pvlib.solarposition.get_solarposition(sunset_recalc, lat, lon)
+    angles.loc[d_sunset.index, new_sunset_angles.columns] = new_sunset_angles.values
+
     # FIXME: if the sun's center does not rise above horizon,
     # we may be between sunrise and sunset events but the apparent_elevation is just below zero
     # For now, we set the rise_fraction in those cases to zero,
     # although there would be a very small non-zero irradiance
-    # Some of these cases might be caught by re-calculating angles in sunrise/sunset hours
-    # with the actual timestamp midpoint
     angles.loc[angles.apparent_elevation <= 0, "risen_fraction"] = 0
 
     angles["sun_zenith"] = np.radians(angles["apparent_zenith"])

@@ -109,9 +109,12 @@ def test_sun_angles(coords_and_datetimes):
     datetimes = datetimes.tz_localize("UTC")
     angles = gsee.trigon.sun_angles(datetimes, coords)
 
-    assert angles["sun_alt"].sum() == pytest.approx(48.038220)
-    assert angles[angles.sun_alt > 0]["sun_alt"].sum() == pytest.approx(2115.812315)
-    assert angles["sun_azimuth"].sum() == pytest.approx(27436.418773)
+    assert angles["sun_alt"].sum() == pytest.approx(79.269849)
+    assert angles[angles.sun_alt > 0]["sun_alt"].sum() == pytest.approx(2127.645941)
+    assert angles["sun_azimuth"].sum() == pytest.approx(27436.169951)
+    assert angles[angles.sun_alt > 0]["sun_azimuth"].sum() == pytest.approx(
+        15091.976727
+    )
 
     assert angles.loc["2000-01-01 07:00:00", "risen_fraction"] == pytest.approx(
         0.782045
@@ -153,7 +156,7 @@ def test_aperture_irradiance_dni_only(irradiance, coords_and_datetimes):
     coords = coords_and_datetimes[0]
     direct, diffuse = irradiance["direct"], irradiance["diffuse"]
     result = gsee.trigon.aperture_irradiance(direct, diffuse, coords, dni_only=True)
-    assert result.mean() == pytest.approx(264.392853)
+    assert result.mean() == pytest.approx(260.794548)
     assert result.loc["2000-12-31 12:00:00"] == pytest.approx(1448.534620)
 
 
@@ -193,7 +196,7 @@ def test_aperture_irradiance_tracking_0(irradiance, coords_and_datetimes):
         irradiance, coords_and_datetimes, tracking=0, legacy_solarposition=False
     )
     assert isinstance(result, pd.DataFrame)
-    assert result.mean()["direct"] == pytest.approx(186.074545)
+    assert result.mean()["direct"] == pytest.approx(185.224865)
     assert result.mean()["diffuse"] == pytest.approx(59.506054)
 
 
@@ -236,6 +239,6 @@ def test_aperture_irradiance_tracking_2(irradiance, coords_and_datetimes):
         irradiance, coords_and_datetimes, tracking=2, legacy_solarposition=False
     )
     assert isinstance(result, pd.DataFrame)
-    assert result.mean()["direct"] == pytest.approx(264.392853)
-    assert result.mean()["diffuse"] == pytest.approx(58.167415)
+    assert result.mean()["direct"] == pytest.approx(260.794548)
+    assert result.mean()["diffuse"] == pytest.approx(58.169965)
     assert result.loc["2000-12-31 12:00:00", "direct"] == pytest.approx(1448.534620)
