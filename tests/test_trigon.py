@@ -10,7 +10,7 @@ import gsee.trigon
 @pytest.fixture
 def coords_and_datetimes():
     coords = (47.36, 8.55)  # Zurich, Switzerland
-    datetimes = pd.date_range("2000-01-01 00:00", "2000-12-31 23:00", freq="1H")
+    datetimes = pd.date_range("2000-01-01 00:00", "2000-12-31 23:00", freq="1h")
     return coords, datetimes
 
 
@@ -68,7 +68,7 @@ def test_sun_rise_set_times_pvlib_at_ephem_failure_location():
     # This combination of coords and datetimes causes ephem to get stuck in a loop
     # as of v4.1.3 through v4.1.6
     coords = (71.50, 179.50)
-    datetimes = pd.date_range("2019-01-01 00:00", "2019-12-31 23:00", freq="1H")
+    datetimes = pd.date_range("2019-01-01 00:00", "2019-12-31 23:00", freq="1h")
     rise_set_times = gsee.trigon.sun_rise_set_times(datetimes, coords)
 
     assert isinstance(rise_set_times, pd.DataFrame)

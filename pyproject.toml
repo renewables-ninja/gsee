@@ -11,7 +11,7 @@ testpaths = ["tests"]
 
 [tool.black]
 line-length = 88
-target-version = ['py37', 'py38']
+target-version = ['py311', 'py312', 'py313']
 include = '\.pyi?$'
 exclude = '''
 /(
@@ -47,6 +47,7 @@ name = "gsee"
 authors = [
   { name = "Stefan Pfenninger", email = "stefan@pfenninger.org" },
 ]
+requires-python = ">=3.11"
 description="GSEE: Global Solar Energy Estimator"
 readme = "README.md"
 license = { text = "MIT" }

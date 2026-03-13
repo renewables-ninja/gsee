@@ -42,7 +42,10 @@ def _get_rise_and_set_time(date, sun, obs):
 
 
 def _daily_dtindex(datetime_index):
-    return pd.DatetimeIndex(datetime_index.to_series().map(pd.Timestamp.date).unique())
+    idx = datetime_index.normalize().unique()
+    if idx.tz is not None:
+        idx = idx.tz_localize(None)
+    return idx
 
 
 def sun_rise_set_times(datetime_index, coords):
@@ -56,8 +59,12 @@ def sun_rise_set_times(datetime_index, coords):
     """
     dtindex = _daily_dtindex(datetime_index)
     loc = pvlib.location.Location(*coords)
-    result = loc.get_sun_rise_set_transit(dtindex.tz_localize("UTC"), method="spa")
-    result.index = dtindex.tz_localize("UTC")
+    if dtindex.tz is None:
+        dtindex_utc = dtindex.tz_localize("UTC")
+    else:
+        dtindex_utc = dtindex.tz_convert("UTC")
+    result = loc.get_sun_rise_set_transit(dtindex_utc, method="spa")
+    result.index = dtindex_utc
     return result
 
 
@@ -200,7 +207,7 @@ def sun_angles_legacy(datetime_index, coords, rise_set_times=None):
         obs.date = item
         # rise/set times are indexed by day, so need to adjust lookup
         rise_time, set_time = rise_set_times.loc[
-            pd.Timestamp(item.date()), ["sunrise", "sunset"]
+            pd.Timestamp(item.date().isoformat()), ["sunrise", "sunset"]
         ]
 
         # Set angles, sun altitude and duration based on hour of day:
@@ -324,8 +331,9 @@ def aperture_irradiance(
         Angle of panel relative to the horizontal plane.
         0 = flat.
     azimuth : float, default=0
-        Deviation of the tilt direction from the meridian.
-        0 = towards pole, going clockwise, 3.14 = towards equator.
+        Deviation of the tilt direction from the meridian (radians).
+        0 = towards North, pi (3.14) = towards South.
+        Automatically corrected for southern hemisphere.
     tracking : int, default=0
         0 (none, default), 1 (tilt), or 2 (tilt and azimuth).
         If 1, `tilt` gives the tilt of the tilt axis relative to horizontal
@@ -382,10 +390,10 @@ def aperture_irradiance(
         # 2-axis tracking means incidence angle is zero
         # Assuming azimuth/elevation tracking for tilt/azimuth angles
         incidence = 0
-        panel_tilt = angles["sun_zenith"]
+        panel_tilt = (np.pi / 2) - angles["sun_alt"]
         azimuth = angles["sun_azimuth"]
     else:
-        raise ValueError("Invalid setting for tracking: {}".format(tracking))
+        raise ValueError(f"Invalid setting for tracking: {tracking}")
 
     # 4. Compute direct and diffuse irradiance on plane
     # Clipping ensures that very low panel to sun altitude angles do not
