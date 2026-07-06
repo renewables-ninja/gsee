@@ -8,6 +8,9 @@ minversion = "6.0"
 # addopts = "-rav --dist=loadscope --strict-markers -nauto --cov-report=xml --cov-config=pyproject.toml"
 
 testpaths = ["tests"]
+markers = [
+  "reference: reference regression tests (deselect with -m 'not reference')",
+]
 
 [tool.black]
 line-length = 88
@@ -57,6 +60,7 @@ classifiers = [
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
 ]
+requires-python = ">=3.11"
 dynamic = ["version", "dependencies"]
 
 [tool.setuptools.dynamic]
@@ -66,3 +70,25 @@ version = { attr = "gsee._version.__version__" }
 [project.urls]
 repository = "https://github.com/renewables-ninja/gsee"
 changelog = "https://github.com/renewables-ninja/gsee/blob/master/CHANGELOG.md"
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "linux-64"]
+
+[tool.pixi.dependencies]
+python = ">=3.12,<3.14"
+
+[tool.pixi.pypi-dependencies]
+gsee = { path = ".", editable = true }
+
+[tool.pixi.feature.dev.pypi-dependencies]
+pytest = ">=8.3"
+black = ">=24"
+
+[tool.pixi.environments]
+default = { features = ["dev"], solve-group = "default" }
+
+[tool.pixi.tasks]
+test = "pytest"
+generate-reference = "python -m tests.reference.generate"
+benchmark = "python benchmarks/benchmark.py"

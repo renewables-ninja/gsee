@@ -6,3 +6,5 @@ dist/
 *.html
 *.cache/
 *.so
+.pixi/
+benchmarks/results/
