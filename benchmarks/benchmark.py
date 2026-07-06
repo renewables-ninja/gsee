@@ -30,8 +30,9 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from gsee import api, brl_model, pv, trigon
+from gsee import api, pv
 from gsee.core import solarposition
+from gsee.legacy import brl_model, trigon
 from gsee.synthetic import synthetic_weather
 
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "results")

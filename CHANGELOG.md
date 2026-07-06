@@ -6,6 +6,9 @@
 - Added: vectorized core modules `gsee.core.irradiance` , `gsee.core.panel`, `gsee.core.inverter`, and `gsee.core.diffuse`
 - Modified: `pv.run_model` is now wired through the vectorized core, making runs about 20 times faster, but with a small deviation due to the switch to (more accurate) sun position calculations
 - Fixed: timesteps with NaN inputs to `pv.run_model` now return NaN instead of silently returning 0
+- Modified: rozen pre-0.4 single-site implementation now lives in `gsee.legacy` and requires the new optional `legacy` extra (`pip install gsee[legacy]`)
+- Modified: `ephem` is no longer a required dependency; it is only needed for `gsee.legacy`
+- Deprecated: `gsee.trigon` and `gsee.brl_model` (now aliases of their `gsee.legacy` counterparts) and `pv.run_model(legacy_solarposition=True)`
 - Added: climate data interface rebuilt on the vectorized core as `gsee.climate.run_climate`
 - Added: the time-dependent SPA terms are cached per time index, so repeated computations over the same times only compute them once
 - Fixed: two long-standing units bugs in the BRL diffuse-fraction model: apparent solar time was fed to the model in radians (`ephem.hours` floats are radians), and solar altitude was fed in radians, evaluated once at midnight instead of per hour. The correction raises the mean estimated diffuse fraction by ~+0.06, changing annual PV output by roughly -1.3% to -2.5% (fixed tilt).

@@ -251,6 +251,7 @@ class TestBuiltinPdfs:
             climate.builtin_pdfs()
 
     def test_user_supplied_pdf_file(self, tmp_path):
+        pytest.importorskip("h5netcdf")
         path = tmp_path / "pdfs.nc"
         _synthetic_pdfs().to_netcdf(path, engine="h5netcdf")
         data = _dataset(pd.date_range("2019-01-01", periods=3, freq="MS"), 180.0)

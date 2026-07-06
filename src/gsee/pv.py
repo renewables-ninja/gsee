@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 import pvlib
 
-from gsee import api, cec_tools, trigon
+from gsee import api, cec_tools
 
 # Constants
 R_TAMB = 20  # Reference ambient temperature (degC)
@@ -424,17 +424,19 @@ def run_model(
         Additional system losses not caused by panel and inverter (fraction).
     angles : pandas DataFrame, default None
         Precomputed solar angles in the format returned by
-        `gsee.api.sun_angles_frame` or `trigon.sun_angles` (degree
-        columns `apparent_elevation` and `azimuth` plus
-        `risen_fraction`), indexed like `data`. A legacy frame with a
-        `duration` column is run through the frozen pre-0.4
-        implementation instead.
+        `gsee.api.sun_angles_frame` (degree columns
+        `apparent_elevation` and `azimuth` plus `risen_fraction`),
+        indexed like `data`. A legacy frame with a `duration` column
+        is run through `gsee.legacy.run_model` instead (deprecated,
+        see below).
     include_raw_data : bool, default False
         If true, returns a DataFrame instead of Series which includes
         the input data (panel irradiance and temperature).
     legacy_solarposition : bool, default False
-        If true, runs the frozen pre-0.4 implementation, which uses the
-        ephem library for solar position calculations. Only useful for
+        Deprecated, will be removed in 0.5.0. If true, delegates to
+        `gsee.legacy.run_model`, the frozen pre-0.4 implementation
+        with ephem-based solar positions (requires the optional
+        'legacy' extra: `pip install gsee[legacy]`). Only useful for
         replicating older simulation runs.
     kwargs : additional kwargs passed on to the panel model (e.g.
         `c_temp_amb`, `c_temp_irrad` for the Huld panels; `windspeed`,
@@ -447,7 +449,17 @@ def run_model(
 
     """
     if legacy_solarposition or (angles is not None and "duration" in angles.columns):
-        return _run_model_legacy(
+        warnings.warn(
+            "legacy_solarposition=True and duration-based angles frames are "
+            "deprecated and will be removed in 0.5.0; call "
+            "gsee.legacy.run_model directly (requires the optional 'legacy' "
+            "extra: pip install gsee[legacy])",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        from gsee import legacy  # deferred: needs the optional ephem dependency
+
+        return legacy.run_model(
             data,
             coords,
             tilt,
@@ -546,101 +558,6 @@ def _angles_arrays(angles):
         "azimuth": angles["azimuth"].to_numpy(dtype=float)[:, None],
         "risen_fraction": angles["risen_fraction"].to_numpy(dtype=float)[:, None],
     }
-
-
-def _run_model_legacy(
-    data,
-    coords,
-    tilt,
-    azim,
-    tracking,
-    capacity,
-    inverter_capacity=None,
-    use_inverter=True,
-    technology="csi",
-    system_loss=0.10,
-    angles=None,
-    include_raw_data=False,
-    legacy_solarposition=False,
-    **kwargs,
-):
-    """
-    The frozen pre-0.4 single-site implementation (pandas pipeline on
-    `gsee.trigon`), kept to replicate older simulation runs; reached
-    via `run_model(legacy_solarposition=True)` or a legacy
-    (duration-based) `angles` frame. Scheduled to move to
-    `gsee.legacy` — do not modify.
-
-    """
-    if (system_loss < 0) or (system_loss > 1):
-        raise ValueError("system_loss must be >=0 and <=1")
-
-    # Process data
-    dir_horiz = data.global_horizontal * (1 - data.diffuse_fraction)
-    diff_horiz = data.global_horizontal * data.diffuse_fraction
-
-    # NB: aperture_irradiance expects azim/tilt in radians!
-    irrad = trigon.aperture_irradiance(
-        dir_horiz,
-        diff_horiz,
-        coords,
-        tracking=tracking,
-        azimuth=math.radians(azim),
-        tilt=math.radians(tilt),
-        angles=angles,
-        legacy_solarposition=legacy_solarposition,
-    )
-    datetimes = irrad.index
-
-    # Temperature, if it was given
-    if "temperature" in data.columns:
-        tamb = data["temperature"]
-    else:
-        tamb = pd.Series(R_TAMB, index=datetimes)
-
-    # Set up the panel model
-    # NB: panel efficiency is not used here, but we retain the possibility
-    # to adjust both efficiency and panel size in case we want to emulate
-    # specific panel types
-    panel_class = _PANEL_TYPES[technology]
-    panel_efficiency = 0.1
-    area_per_capacity = 0.001 / panel_efficiency
-
-    panel = panel_class(
-        panel_aperture=capacity * area_per_capacity,
-        panel_ref_efficiency=panel_efficiency,
-        **kwargs,
-    )
-
-    # Run the panel model and return output
-    irradiance = irrad.direct + irrad.diffuse
-    output = panel.panel_power(irradiance, tamb)
-    relative_efficiency = panel.panel_relative_efficiency(irradiance, tamb)
-    dc_out = pd.Series(output, index=datetimes).clip(upper=capacity)
-
-    if inverter_capacity is None:
-        inverter_capacity = capacity
-
-    if use_inverter:
-        inverter = Inverter(inverter_capacity)
-        ac_out = dc_out.apply(inverter.ac_output).clip(lower=0)
-        ac_out_final = ac_out * (1 - system_loss)
-    else:
-        ac_out_final = dc_out * (1 - system_loss)
-
-    if include_raw_data:
-        return pd.DataFrame.from_dict(
-            {
-                "output": ac_out_final,
-                "direct": irrad.direct,
-                "diffuse": irrad.diffuse,
-                "temperature": tamb,
-                "module_temperature": panel.module_temperature(irradiance, tamb),
-                "relative_efficiency": relative_efficiency,
-            }
-        )
-    else:
-        return ac_out_final
 
 
 def optimal_tilt(lat):

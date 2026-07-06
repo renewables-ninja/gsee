@@ -109,6 +109,7 @@ def test_invalid_system_loss_raises(data):
     ],
 )
 def test_routes_to_legacy_implementation(data, monkeypatch, kwargs):
+    legacy = pytest.importorskip("gsee.legacy", exc_type=ImportError)
     if kwargs.get("angles") == "duration_frame":
         kwargs["angles"] = pd.DataFrame({"duration": 60.0}, index=data.index)
     called = {}
@@ -117,6 +118,7 @@ def test_routes_to_legacy_implementation(data, monkeypatch, kwargs):
         called["legacy"] = True
         return pd.Series(0.0, index=data.index)
 
-    monkeypatch.setattr(pv, "_run_model_legacy", fake_legacy)
-    pv.run_model(data, coords=COORDS, **CONFIG, **kwargs)
+    monkeypatch.setattr(legacy, "run_model", fake_legacy)
+    with pytest.warns(DeprecationWarning, match="gsee.legacy.run_model"):
+        pv.run_model(data, coords=COORDS, **CONFIG, **kwargs)
     assert called

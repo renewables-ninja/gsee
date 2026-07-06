@@ -15,10 +15,22 @@ If both tests fail, the model's behaviour has definitely changed.
 
 import pytest
 
-from gsee import pv, trigon
+from gsee import pv
 from tests.reference import cases, compare
 
 CASES = cases.build_cases()
+
+
+def _model_runner(case):
+    """
+    Legacy cases run on the frozen implementation in `gsee.legacy`
+    (skipped when the optional ephem dependency is missing); their
+    committed reference data is frozen and must keep passing "exact".
+
+    """
+    if case["params"].get("legacy_solarposition"):
+        return pytest.importorskip("gsee.legacy", exc_type=ImportError).run_model
+    return pv.run_model
 
 
 def _fail_with_reports(exact_report, physical_ok, physical_report):
@@ -44,7 +56,8 @@ def _fail_with_reports(exact_report, physical_ok, physical_report):
 def test_reference_output(case_id):
     case = CASES[case_id]
     data = cases.read_frame(cases.input_path(case_id))
-    result = pv.run_model(
+    run_model = _model_runner(case)
+    result = run_model(
         data,
         coords=(case["lat"], case["lon"]),
         include_raw_data=True,
@@ -66,6 +79,14 @@ def test_reference_output(case_id):
     "case_id", sorted(c for c in CASES if CASES[c]["store_angles"])
 )
 def test_reference_angles(case_id):
+    """
+    The stored angles frames are frozen artifacts of the legacy
+    pvlib-based `sun_angles` and guard `gsee.legacy.trigon` against
+    drift. The current core is held to the same data with the
+    "physical" profile in test_core_solarposition.
+
+    """
+    trigon = pytest.importorskip("gsee.legacy.trigon", exc_type=ImportError)
     case = CASES[case_id]
     data = cases.read_frame(cases.input_path(case_id))
     angles = trigon.sun_angles(data.index, (case["lat"], case["lon"]))

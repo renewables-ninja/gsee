@@ -2,11 +2,12 @@
 Validation of the vectorized BRL model (gsee.core.diffuse).
 
 Its `legacy_predictors=True` mode is compared against the unchanged
-ephem-based implementation (gsee.brl_model), which is kept as the
-legacy reference. Bit-identical results are impossible, so the
-comparison is tolerance-based, with the tolerances pinned from
-measured behaviour. Deviations at the 1e-3 level are accepted except
-for the handful of hours where the persistence branch flips.
+ephem-based implementation (gsee.legacy.brl_model), which is kept as
+the legacy reference (test skipped when the optional ephem dependency
+is missing). Bit-identical results are impossible, so the comparison
+is tolerance-based, with the tolerances pinned from measured
+behaviour. Deviations at the 1e-3 level are accepted except for the
+handful of hours where the persistence branch flips.
 
 The corrected default mode has no independent reference
 implementation, so it is validated structurally. Its logit must differ
@@ -21,7 +22,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from gsee import brl_model
 from gsee.core import diffuse, solarposition
 
 SITES = {"zurich": (47.36, 8.55), "cape_town": (-33.9, 18.4)}
@@ -44,6 +44,7 @@ def clearness_index():
 
 @pytest.mark.parametrize("site", sorted(SITES))
 def test_legacy_mode_matches_legacy_implementation(site, clearness_index):
+    brl_model = pytest.importorskip("gsee.legacy.brl_model", exc_type=ImportError)
     lat, lon = SITES[site]
     clearness = _synthetic_clearness(clearness_index, seed=42)
     legacy = brl_model.run(pd.Series(clearness, index=clearness_index), (lat, lon))

@@ -1,10 +1,19 @@
+"""
+Tests of the frozen pre-0.4 implementation in `gsee.legacy.trigon`
+(formerly `gsee.trigon`). Skipped entirely when the optional ephem
+dependency is not installed.
+
+"""
+
 import math
 import os
 
 import pandas as pd
-import pytest  # pylint: disable=unused-import
+import pytest
 
-import gsee.trigon
+pytest.importorskip("ephem")
+
+from gsee.legacy import trigon  # noqa: E402
 
 
 @pytest.fixture
@@ -22,7 +31,7 @@ def irradiance():
 
 def test_sun_rise_set_times_ephem(coords_and_datetimes):
     coords, datetimes = coords_and_datetimes
-    rise_set_times = gsee.trigon.sun_rise_set_times_ephem(datetimes, coords)
+    rise_set_times = trigon.sun_rise_set_times_ephem(datetimes, coords)
 
     assert isinstance(rise_set_times, pd.DataFrame)
 
@@ -44,7 +53,7 @@ def test_sun_rise_set_times_ephem(coords_and_datetimes):
 
 def test_sun_rise_set_times_pvlib(coords_and_datetimes):
     coords, datetimes = coords_and_datetimes
-    rise_set_times = gsee.trigon.sun_rise_set_times(datetimes, coords)
+    rise_set_times = trigon.sun_rise_set_times(datetimes, coords)
 
     assert isinstance(rise_set_times, pd.DataFrame)
 
@@ -69,7 +78,7 @@ def test_sun_rise_set_times_pvlib_at_ephem_failure_location():
     # as of v4.1.3 through v4.1.6
     coords = (71.50, 179.50)
     datetimes = pd.date_range("2019-01-01 00:00", "2019-12-31 23:00", freq="1h")
-    rise_set_times = gsee.trigon.sun_rise_set_times(datetimes, coords)
+    rise_set_times = trigon.sun_rise_set_times(datetimes, coords)
 
     assert isinstance(rise_set_times, pd.DataFrame)
 
@@ -88,13 +97,13 @@ def test_sun_angles_non_utc(coords_and_datetimes):
     coords, datetimes = coords_and_datetimes
     direct, diffuse = irradiance["direct"], irradiance["diffuse"]
     with pytest.raises(ValueError) as e:
-        gsee.trigon.aperture_irradiance(direct, diffuse, coords)
+        trigon.aperture_irradiance(direct, diffuse, coords)
     assert "Input data must be in UTC timezone." in str(e.value)
 
 
 def test_sun_angles_legacy(coords_and_datetimes):
     coords, datetimes = coords_and_datetimes
-    angles = gsee.trigon.sun_angles_legacy(datetimes, coords)
+    angles = trigon.sun_angles_legacy(datetimes, coords)
 
     assert angles["sun_alt"].sum() == pytest.approx(2127.154644)
     assert angles["sun_azimuth"].sum() == pytest.approx(15224.532375)
@@ -107,7 +116,7 @@ def test_sun_angles_legacy(coords_and_datetimes):
 def test_sun_angles(coords_and_datetimes):
     coords, datetimes = coords_and_datetimes
     datetimes = datetimes.tz_localize("UTC")
-    angles = gsee.trigon.sun_angles(datetimes, coords)
+    angles = trigon.sun_angles(datetimes, coords)
 
     assert angles["sun_alt"].sum() == pytest.approx(79.269849)
     assert angles[angles.sun_alt > 0]["sun_alt"].sum() == pytest.approx(2127.645941)
@@ -137,14 +146,14 @@ def test_sun_angles(coords_and_datetimes):
     ],
 )
 def test_incidence_single_tracking(test_input, expected):
-    result = math.degrees(gsee.trigon._incidence_single_tracking(*test_input))
+    result = math.degrees(trigon._incidence_single_tracking(*test_input))
     assert result == pytest.approx(expected)
 
 
 def test_aperture_irradiance_dni_only_legacy(irradiance, coords_and_datetimes):
     coords = coords_and_datetimes[0]
     direct, diffuse = irradiance["direct"], irradiance["diffuse"]
-    result = gsee.trigon.aperture_irradiance(
+    result = trigon.aperture_irradiance(
         direct, diffuse, coords, dni_only=True, legacy_solarposition=True
     )
     assert isinstance(result, pd.Series)
@@ -155,7 +164,7 @@ def test_aperture_irradiance_dni_only_legacy(irradiance, coords_and_datetimes):
 def test_aperture_irradiance_dni_only(irradiance, coords_and_datetimes):
     coords = coords_and_datetimes[0]
     direct, diffuse = irradiance["direct"], irradiance["diffuse"]
-    result = gsee.trigon.aperture_irradiance(direct, diffuse, coords, dni_only=True)
+    result = trigon.aperture_irradiance(direct, diffuse, coords, dni_only=True)
     assert result.mean() == pytest.approx(260.794548)
     assert result.loc["2000-12-31 12:00:00"] == pytest.approx(1448.534620)
 
@@ -170,7 +179,7 @@ def _aperture_irradiance(
 ):
     coords = coords_and_datetimes[0]
     direct, diffuse = irradiance["direct"], irradiance["diffuse"]
-    result = gsee.trigon.aperture_irradiance(
+    result = trigon.aperture_irradiance(
         direct,
         diffuse,
         coords,
