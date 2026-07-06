@@ -93,17 +93,24 @@ def _compute_chunk(payload):
     """
     Full PV pipeline for one chunk of sites: solar angles, in-plane
     irradiance, panel DC power (clipped to capacity), inverter, system
-    losses. Semantics replicate `gsee.pv.run_model`, except that NaN
-    inputs yield NaN output (run_model silently yields 0). Top-level so
-    it is picklable for process-based parallelism.
+    losses. This is the compute path shared by `run_sites` and the
+    single-site `gsee.pv.run_model`; NaN inputs yield NaN output.
+    Top-level so it is picklable for process-based parallelism.
 
-    Solar positions are always computed in float64 (SPA needs the
-    precision); with a float32 payload, everything downstream of the
-    angles runs and returns in float32.
+    Precomputed solar angles may be passed via the optional "angles"
+    payload key (a dict as returned by
+    `gsee.core.solarposition.sun_angles`); otherwise they are computed
+    from "times". Solar positions are always computed in float64 (SPA
+    needs the precision); with a float32 payload, everything downstream
+    of the angles runs and returns in float32.
 
     """
     dtype = np.dtype(payload["dtype"])
-    angles = solarposition.sun_angles(payload["times"], payload["lat"], payload["lon"])
+    angles = payload.get("angles")
+    if angles is None:
+        angles = solarposition.sun_angles(
+            payload["times"], payload["lat"], payload["lon"]
+        )
     if dtype != np.float64:
         angles = {
             key: (
@@ -209,10 +216,10 @@ def run_sites(
     """
     Run the PV model for many sites at once.
 
-    Physically equivalent to per-site `gsee.pv.run_model` but computed
-    on `(time, site)` arrays: the time-dependent solar position terms
-    are shared across sites, so per-site cost is ~20x lower than the
-    single-site path.
+    The same model as the single-site `gsee.pv.run_model` (both share
+    one compute path), but computed on `(time, site)` arrays: the
+    time-dependent solar position terms are shared across sites, so
+    per-site cost is ~20x lower than running sites one by one.
 
     Memory behaviour: input data is loaded one site chunk at a time —
     pass a lazily loaded Dataset (e.g. from

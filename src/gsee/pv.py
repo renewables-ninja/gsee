@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 import pvlib
 
-from gsee import cec_tools, trigon
+from gsee import api, cec_tools, trigon
 
 # Constants
 R_TAMB = 20  # Reference ambient temperature (degC)
@@ -389,14 +389,19 @@ def run_model(
     **kwargs,
 ):
     """
-    Run PV plant model.
+    Run PV plant model for a single site.
+
+    Computed on the vectorized core, sharing its code path with the
+    multi-site `gsee.api.run_sites`; pandas in and out.
 
     Parameters
     ----------
     data : pandas DataFrame
         Must contain columns 'global_horizontal' (in W/m2)
         and 'diffuse_fraction', and may contain a 'temperature' column
-        for ambient air temperature (in deg C).
+        for ambient air temperature (in deg C). The index must be a
+        uniformly spaced DatetimeIndex in UTC. Timesteps with NaN
+        inputs return NaN (before v0.4 they silently returned 0).
     coords : (float, float) tuple
         Latitude and longitude.
     tilt : float
@@ -413,20 +418,27 @@ def run_model(
     use_inverter : bool, optional
         Model inverter capacity and inverter losses (defaults to True).
     technology : str, default 'csi'
-        Panel technology, must be one of 'csi', 'cis', 'cdte', 'singlediode'
+        Panel technology, one of 'csi', 'csi-new', 'cis', 'cdte',
+        'cec-csi-median', or 'singlediode' (requires `module_params`).
     system_loss : float, default 0.10
         Additional system losses not caused by panel and inverter (fraction).
     angles : pandas DataFrame, default None
-        Solar angles. If already computed, speeds up the computations.
+        Precomputed solar angles in the format returned by
+        `gsee.api.sun_angles_frame` or `trigon.sun_angles` (degree
+        columns `apparent_elevation` and `azimuth` plus
+        `risen_fraction`), indexed like `data`. A legacy frame with a
+        `duration` column is run through the frozen pre-0.4
+        implementation instead.
     include_raw_data : bool, default False
         If true, returns a DataFrame instead of Series which includes
         the input data (panel irradiance and temperature).
     legacy_solarposition : bool, default False
-        If true, uses the ephem library for solar position calculations. If false, uses
-        `pvlib.solarposition.get_solarposition`. Because of issues with the ephem
-        library, this should only be set to True if required for backwards compatibility
-        or consistency with older simulation runs.
-    kwargs : additional kwargs passed on the model constructor
+        If true, runs the frozen pre-0.4 implementation, which uses the
+        ephem library for solar position calculations. Only useful for
+        replicating older simulation runs.
+    kwargs : additional kwargs passed on to the panel model (e.g.
+        `c_temp_amb`, `c_temp_irrad` for the Huld panels; `windspeed`,
+        `temperature_params`, `module_params` for single-diode).
 
     Returns
     -------
@@ -434,10 +446,132 @@ def run_model(
         Electric output from PV system in each hour (W).
 
     """
+    if legacy_solarposition or (angles is not None and "duration" in angles.columns):
+        return _run_model_legacy(
+            data,
+            coords,
+            tilt,
+            azim,
+            tracking,
+            capacity,
+            inverter_capacity=inverter_capacity,
+            use_inverter=use_inverter,
+            technology=technology,
+            system_loss=system_loss,
+            angles=angles,
+            include_raw_data=include_raw_data,
+            legacy_solarposition=legacy_solarposition,
+            **kwargs,
+        )
 
-    # FIXME: ensure that `data` and `angles` if given are both in the same time zone
-    # data = data.tz_localize("UTC")
+    if (system_loss < 0) or (system_loss > 1):
+        raise ValueError("system_loss must be >=0 and <=1")
 
+    if angles is None:
+        if str(data.index.tz) != "UTC":
+            raise ValueError("Input data must be in UTC timezone.")
+        angles_arrays = None
+    else:
+        if not angles.index.equals(data.index):
+            raise ValueError("angles must have the same index as data")
+        angles_arrays = _angles_arrays(angles)
+
+    ghi = data["global_horizontal"].to_numpy(dtype=float)[:, None]
+    fraction = data["diffuse_fraction"].to_numpy(dtype=float)[:, None]
+    if "temperature" in data.columns:
+        tamb = data["temperature"].to_numpy(dtype=float)[:, None]
+    else:
+        tamb = np.full_like(ghi, float(R_TAMB))
+
+    lat, lon = coords
+    if inverter_capacity is None:
+        inverter_capacity = capacity
+    module_params = kwargs.pop("module_params", None)
+
+    result = api._compute_chunk(
+        {
+            "times": data.index,
+            "lat": np.array([float(lat)]),
+            "lon": np.array([float(lon)]),
+            "angles": angles_arrays,
+            "direct": ghi * (1 - fraction),
+            "diffuse": ghi * fraction,
+            "tamb": tamb,
+            "tilt": np.array([math.radians(tilt)]),
+            "azimuth": np.array([math.radians(azim)]),
+            "capacity": np.array([float(capacity)]),
+            "inverter_capacity": np.array([float(inverter_capacity)]),
+            "albedo": np.array([0.3]),
+            "tracking": tracking,
+            "technology": technology,
+            "module_params": module_params,
+            "use_inverter": use_inverter,
+            "system_loss": system_loss,
+            "include_raw_data": include_raw_data,
+            "panel_kwargs": kwargs,
+            "dtype": "float64",
+        }
+    )
+
+    if include_raw_data:
+        return pd.DataFrame(
+            {
+                "output": result["pv"][:, 0],
+                "direct": result["direct"][:, 0],
+                "diffuse": result["diffuse"][:, 0],
+                "temperature": tamb[:, 0],
+                "module_temperature": result["module_temperature"][:, 0],
+                "relative_efficiency": result["relative_efficiency"][:, 0],
+            },
+            index=data.index,
+        )
+    return pd.Series(result["pv"][:, 0], index=data.index)
+
+
+def _angles_arrays(angles):
+    """
+    Convert a solar angles DataFrame (`gsee.api.sun_angles_frame` /
+    `trigon.sun_angles` format) to the dict of (T, 1) arrays the core
+    consumes.
+
+    """
+    elevation = angles["apparent_elevation"].to_numpy(dtype=float)[:, None]
+    if "apparent_zenith" in angles.columns:
+        zenith = angles["apparent_zenith"].to_numpy(dtype=float)[:, None]
+    else:
+        zenith = 90.0 - elevation
+    return {
+        "apparent_elevation": elevation,
+        "apparent_zenith": zenith,
+        "azimuth": angles["azimuth"].to_numpy(dtype=float)[:, None],
+        "risen_fraction": angles["risen_fraction"].to_numpy(dtype=float)[:, None],
+    }
+
+
+def _run_model_legacy(
+    data,
+    coords,
+    tilt,
+    azim,
+    tracking,
+    capacity,
+    inverter_capacity=None,
+    use_inverter=True,
+    technology="csi",
+    system_loss=0.10,
+    angles=None,
+    include_raw_data=False,
+    legacy_solarposition=False,
+    **kwargs,
+):
+    """
+    The frozen pre-0.4 single-site implementation (pandas pipeline on
+    `gsee.trigon`), kept to replicate older simulation runs; reached
+    via `run_model(legacy_solarposition=True)` or a legacy
+    (duration-based) `angles` frame. Scheduled to move to
+    `gsee.legacy` — do not modify.
+
+    """
     if (system_loss < 0) or (system_loss > 1):
         raise ValueError("system_loss must be >=0 and <=1")
 
