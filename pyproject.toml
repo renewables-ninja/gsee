@@ -12,27 +12,14 @@ markers = [
   "reference: reference regression tests (deselect with -m 'not reference')",
 ]
 
-[tool.black]
+[tool.ruff]
 line-length = 88
-target-version = ['py37', 'py38']
-include = '\.pyi?$'
-exclude = '''
-/(
-    \.eggs
-  | \.git
-  | \.github
-  | \.mypy_cache
-  | \.pytest_cache
-  | \.vscode
-  | _build
-  | build
-  | dist
-  | .*\.egg-info
+target-version = "py311"
+extend-exclude = ["docs", "dist"]
 
-  # directories without python source files
-  | docs
-)/
-'''
+[tool.ruff.lint]
+# Defaults (pycodestyle errors, pyflakes) plus import sorting
+extend-select = ["I"]
 
 [build-system]
 requires = ["setuptools"]
@@ -83,7 +70,7 @@ gsee = { path = ".", editable = true }
 
 [tool.pixi.feature.dev.pypi-dependencies]
 pytest = ">=8.3"
-black = ">=24"
+ruff = ">=0.8"
 
 [tool.pixi.environments]
 default = { features = ["dev"], solve-group = "default" }
@@ -92,3 +79,5 @@ default = { features = ["dev"], solve-group = "default" }
 test = "pytest"
 generate-reference = "python -m tests.reference.generate"
 benchmark = "python benchmarks/benchmark.py"
+format = "ruff format ."
+lint = "ruff check ."

@@ -10,9 +10,9 @@ use of `pvlib` which implements additional algorithms such as SPA.
 import datetime
 
 import ephem
-import pvlib
 import numpy as np
 import pandas as pd
+import pvlib
 
 
 def _get_rise_and_set_time(date, sun, obs):

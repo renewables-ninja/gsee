@@ -146,9 +146,9 @@ def brl_diffuse_fraction(
 
     psi = _persistence(clearness_days, rise_hour, set_hour)
 
-    per_hour = lambda values: np.repeat(values[:, None, :], 24, axis=1).reshape(
-        n_time, n_site
-    )
+    def per_hour(values):
+        return np.repeat(values[:, None, :], 24, axis=1).reshape(n_time, n_site)
+
     power = (
         params["a0"]
         + params["a1"] * clearness

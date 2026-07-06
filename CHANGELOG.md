@@ -10,6 +10,7 @@
 - Added: reference regression test framework
 - Added: `gsee.synthetic` module with a synthetic weather generator for tests
 - Modified: project environment and tasks now managed with pixi
+- Modified: black replaced by ruff for formatting and linting (`pixi run format` / `pixi run lint`)
 - Fixed: tests updated for pandas 3
 - Added: PV model based on the [single-diode model in pvlib-python](https://pvlib-python.readthedocs.io/en/latest/generated/pvlib.pvsystem.singlediode.html)
 - Added: `SingleDiodePanelCecCsiMedian`, based on the median CSi panel from the CEC database (available as "cec-csi-median")

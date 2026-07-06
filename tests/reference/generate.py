@@ -90,9 +90,9 @@ def sanity_check(case_id, case, result):
         case_id
     )
     cf = output.mean() / capacity
-    assert (
-        CF_BOUNDS[0] < cf < CF_BOUNDS[1]
-    ), "{}: implausible capacity factor {}".format(case_id, cf)
+    assert CF_BOUNDS[0] < cf < CF_BOUNDS[1], (
+        "{}: implausible capacity factor {}".format(case_id, cf)
+    )
     return cf
 
 
