@@ -28,8 +28,10 @@ import time
 
 import numpy as np
 import pandas as pd
+import xarray as xr
 
-from gsee import brl_model, pv, trigon
+from gsee import api, brl_model, pv, trigon
+from gsee.core import solarposition
 from gsee.synthetic import synthetic_weather
 
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), "results")
@@ -80,12 +82,38 @@ def build_benchmarks(quick):
         index=data.index,
     )
 
+    lats_100 = np.linspace(-70.0, 70.0, 100)
+    lons_100 = np.linspace(-180.0, 176.4, 100)
+    dataset_100 = xr.Dataset(
+        {
+            var: (
+                ("time", "site"),
+                np.tile(data[var].to_numpy()[:, None], (1, 100)),
+            )
+            for var in ("global_horizontal", "diffuse_fraction", "temperature")
+        },
+        coords={
+            "time": data.index.tz_localize(None),
+            "site": np.arange(100),
+            "lat": ("site", lats_100),
+            "lon": ("site", lons_100),
+        },
+    )
+
     benchmarks = [
         (
             "sun_rise_set_times",
             lambda: trigon.sun_rise_set_times(data.index, SITE),
         ),
         ("sun_angles", lambda: trigon.sun_angles(data.index, SITE)),
+        (
+            "core_sun_angles_1_site",
+            lambda: solarposition.sun_angles(data.index, *SITE),
+        ),
+        (
+            "core_sun_angles_100_sites",
+            lambda: solarposition.sun_angles(data.index, lats_100, lons_100),
+        ),
         (
             "aperture_irradiance_given_angles",
             lambda: trigon.aperture_irradiance(
@@ -97,6 +125,10 @@ def build_benchmarks(quick):
         (
             "run_model_csi",
             lambda: pv.run_model(data, coords=SITE, **RUN_MODEL_PARAMS),
+        ),
+        (
+            "run_sites_csi_100_sites",
+            lambda: api.run_sites(dataset_100, **RUN_MODEL_PARAMS),
         ),
     ]
 

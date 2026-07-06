@@ -2,6 +2,11 @@
 
 ## 0.4.0 (dev)
 
+- Added: multi-site API with two functions, `gsee.api.run_sites` (xarray Dataset over `(time, site)`) and `gsee.api.run_grid` (`(time, lat, lon)`), with per-site parameters (including callable tilt), site chunking for memory control, and optional parallel processes.
+- Added: vectorized core modules `gsee.core.irradiance` , `gsee.core.panel`, `gsee.core.inverter`, and `gsee.core.diffuse`
+- Fixed: two long-standing units bugs in the BRL diffuse-fraction model: apparent solar time was fed to the model in radians (`ephem.hours` floats are radians), and solar altitude was fed in radians, evaluated once at midnight instead of per hour. The correction raises the mean estimated diffuse fraction by ~+0.06, changing annual PV output by roughly -1.3% to -2.5% (fixed tilt).
+- Added: vectorized multi-site solar position in `gsee.core.solarposition`
+- Added: `gsee.api.sun_angles_frame`, a single-site sun angle calculation from the vectorized core, usable via `run_model(angles=...)`. This is equivalent to `trigon.sun_angles`.
 - Added: reference regression test framework
 - Added: `gsee.synthetic` module with a synthetic weather generator for tests
 - Modified: project environment and tasks now managed with pixi
