@@ -1,0 +1,23 @@
+# Benchmarks are informational only
+# Results are uploaded as artifacts for manual comparison
+# (see benchmarks/benchmark.py --compare).
+name: Benchmarks
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 1 * *" # monthly
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: prefix-dev/setup-pixi@v0.10.0
+        with:
+          cache: true
+      - run: pixi run benchmark
+      - uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: benchmarks/results/*.json

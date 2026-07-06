@@ -11,8 +11,10 @@
 - Added: `gsee.api.sun_angles_frame`, a single-site sun angle calculation from the vectorized core, usable via `run_model(angles=...)`. This is equivalent to `trigon.sun_angles`.
 - Added: reference regression test framework
 - Added: `gsee.synthetic` module with a synthetic weather generator for tests
+- Added: GitHub Actions CI replacing defunct Azure Pipelines
+- Added: release publishing workflow via PyPI trusted publishing
 - Modified: project environment and tasks now managed with pixi
-- Modified: black replaced by ruff for formatting and linting (`pixi run format` / `pixi run lint`)
+- Added: ruff for formatting and linting (`pixi run format` / `pixi run lint`)
 - Fixed: tests updated for pandas 3
 - Added: PV model based on the [single-diode model in pvlib-python](https://pvlib-python.readthedocs.io/en/latest/generated/pvlib.pvsystem.singlediode.html)
 - Added: `SingleDiodePanelCecCsiMedian`, based on the median CSi panel from the CEC database (available as "cec-csi-median")
@@ -22,7 +24,6 @@
 - Added: Inverter model based on PVWatts Version 5 and differentiation between DC and AC output, alongside new `inverter_capacity` and `use_inverter` arguments to `pv.run_model()`
 - Fixed: Clean up non-standard CMIP time attributes in climate data interface
 - Fixed: Improve CF conformity of climate data interface
-- Modified: Clean up and blacken code
 - Modified: Compatibility with more recent versions of pandas and xarray
 
 ## 0.3.1 (2019-07-23)

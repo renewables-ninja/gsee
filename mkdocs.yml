@@ -6,6 +6,11 @@ theme:
     name: material
     logo: ninja.png
     favicon: favicon.ico
+    features:
+        - navigation.tabs
+        - navigation.tabs.sticky
+        - navigation.top
+        - content.code.copy
 
 repo_name: renewables-ninja/gsee
 repo_url: https://github.com/renewables-ninja/gsee/
@@ -13,12 +18,14 @@ edit_uri: ""
 
 nav:
     - Introduction: index.md
-    - Climate Data Interface: climatedata-interface.md
+    - Multi-site simulations: multi-site.md
+    - Climate data interface: climatedata-interface.md
+    - Development: development.md
 
 markdown_extensions:
   - admonition
-  - codehilite
-  - mkautodoc
+  - pymdownx.highlight
+  - pymdownx.superfences
 
 extra_css:
   - 'stylesheets/extra.css'

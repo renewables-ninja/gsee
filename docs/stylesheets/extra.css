@@ -2,6 +2,10 @@
     background-color: #3887be;
 }
 
+.md-tabs {
+    background-color: #3887be;
+}
+
 .md-logo {
     padding: auto;
     margin: 0;
@@ -10,4 +14,23 @@
 .md-logo img {
     width: 32px !important;
     height: 32px !important;
+}
+
+/* Slightly larger body text than the mkdocs-material default (0.8rem) */
+.md-typeset {
+    font-size: 0.85rem;
+}
+
+/* Consistent font sizes: mkdocs-material renders admonitions, details
+   and tables smaller than body text by default */
+.md-typeset .admonition,
+.md-typeset details,
+.md-typeset table:not([class]) {
+    font-size: 1em;
+}
+
+/* Navigation slightly larger than the default 0.7rem */
+.md-nav,
+.md-tabs__link {
+    font-size: 0.75rem;
 }

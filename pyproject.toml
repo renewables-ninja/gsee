@@ -12,6 +12,9 @@ markers = [
   "reference: reference regression tests (deselect with -m 'not reference')",
 ]
 
+[tool.coverage.run]
+source = ["gsee"]
+
 [tool.ruff]
 line-length = 88
 target-version = "py311"
@@ -39,10 +42,10 @@ authors = [
 ]
 description="GSEE: Global Solar Energy Estimator"
 readme = "README.md"
-license = { text = "MIT" }
+license = { text = "BSD-3-Clause" }
 classifiers = [
   "Intended Audience :: Science/Research",
-  "License :: OSI Approved :: MIT License",
+  "License :: OSI Approved :: BSD License",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
@@ -74,16 +77,23 @@ gsee-climate-data = { path = "packages/gsee-climate-data" }
 
 [tool.pixi.feature.dev.pypi-dependencies]
 pytest = ">=8.3"
+pytest-cov = ">=6"
 ruff = ">=0.8"
 dask = ">=2024"
 h5netcdf = ">=1.3"
+mkdocs = ">=1.6"
+mkdocs-material = ">=9.5"
 
 [tool.pixi.environments]
 default = { features = ["dev"], solve-group = "default" }
 
 [tool.pixi.tasks]
 test = "pytest"
+test-cov = "pytest --cov --cov-report=xml --cov-report=term"
 generate-reference = "python -m tests.reference.generate"
 benchmark = "python benchmarks/benchmark.py"
 format = "ruff format ."
+format-check = "ruff format --check ."
 lint = "ruff check ."
+docs-build = "mkdocs build --strict"
+docs-serve = "mkdocs serve"
