@@ -1,4 +1,4 @@
 pandas >=3.0,<4
-pvlib
-ephem ==4.2.1
+pvlib >=0.15
+ephem >=4.2.1
 xarray >=2026.4,<2027

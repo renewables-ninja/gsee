@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 import pvlib
 
-from gsee import trigon, cec_tools
+from gsee import cec_tools, trigon
 
 # Constants
 R_TAMB = 20  # Reference ambient temperature (degC)
@@ -119,7 +119,22 @@ class SingleDiodePanel(PVPanel):
         self.temperature_params = temperature_params
         self.ref_windspeed = ref_windspeed
 
-    def panel_relative_efficiency(self, irradiance, tamb, windspeed=None):
+    def module_temperature(self, irradiance, tamb, windspeed=None):
+        if windspeed is None:
+            windspeed = self.ref_windspeed
+
+        a = self.temperature_params["a"]
+        b = self.temperature_params["b"]
+        deltaT = self.temperature_params["deltaT"]
+
+        cell_temperature = pvlib.temperature.sapm_cell(
+            irradiance, tamb, windspeed, a, b, deltaT
+        )
+        return cell_temperature
+
+    def panel_relative_efficiency(
+        self, irradiance, tamb, windspeed=None, temperature_correction_method=None
+    ):
         """
         Returns the relative conversion efficiency modifier as a
         function of irradiance and ambient temperature.
@@ -134,17 +149,17 @@ class SingleDiodePanel(PVPanel):
                 "sapm"
             ][self.temperature_params]
 
-        a = self.temperature_params["a"]
-        b = self.temperature_params["b"]
-        deltaT = self.temperature_params["deltaT"]
+        cell_temperature = self.module_temperature(irradiance, tamb, windspeed)
 
-        cell_temperature = pvlib.temperature.sapm_cell(
-            irradiance, tamb, windspeed, a, b, deltaT
-        )
+        if temperature_correction_method == "clip_low_temperature":
+            cell_temperature = cell_temperature.clip(lower=0)
 
         efficiency = cec_tools.relative_eff(
             irradiance, cell_temperature, self.module_params
         )
+
+        if temperature_correction_method == "clip_high_efficiency":
+            efficiency[efficiency > 1] = 1
 
         return efficiency
 
@@ -169,7 +184,12 @@ class HuldPanel(PVPanel):
         self.c_temp_tamb = c_temp_amb
         self.c_temp_irrad = c_temp_irrad
 
-    def panel_relative_efficiency(self, irradiance, tamb):
+    def module_temperature(self, irradiance, tamb):
+        return self.c_temp_tamb * tamb + self.c_temp_irrad * irradiance
+
+    def panel_relative_efficiency(
+        self, irradiance, tamb, temperature_correction_method="clip_high_efficiency"
+    ):
         """
         Returns the relative conversion efficiency modifier as a
         function of irradiance and ambient temperature.
@@ -187,9 +207,13 @@ class HuldPanel(PVPanel):
         # G_: normalized in-plane irradiance
         G_ = irradiance / R_IRRADIANCE
         # T_: normalized module temperature
-        T_ = (self.c_temp_tamb * tamb + self.c_temp_irrad * irradiance) - R_TMOD
+        T_ = self.module_temperature(irradiance, tamb) - R_TMOD
         # NB: np.log without base implies base e or ln
         # Catching warnings to suppress "RuntimeWarning: invalid value encountered in log"
+
+        if temperature_correction_method == "clip_low_temperature":
+            T_ = T_.clip(lower=0)
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             eff = (
@@ -201,6 +225,12 @@ class HuldPanel(PVPanel):
             )
         eff = eff.fillna(0)  # NaNs in case that G_ was <= 0
         eff[eff < 0] = 0  # Also make sure efficiency can't be negative
+
+        # eff[eff > 1] = np.cbrt(eff[eff > 1])  # Efficiency above 1.0 is tempered with cubic root
+
+        if temperature_correction_method == "clip_high_efficiency":
+            eff[eff > 1] = 1
+
         return eff
 
 
@@ -214,6 +244,24 @@ class HuldCSiPanel(HuldPanel):
         self.k_3 = -0.004681
         self.k_4 = 0.000148
         self.k_5 = 0.000169
+        self.k_6 = 0.000005
+
+
+class HuldCSiPanelUpdated(HuldPanel):
+    """
+    c-Si technology, based on data from https://onlinelibrary.wiley.com/doi/10.1002/pip.3926,
+    as referenced in PVLib's Huld model at
+    https://pvlib-python.readthedocs.io/en/v0.13.1/reference/generated/pvlib.pvarray.huld.html
+
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.k_1 = -0.006756
+        self.k_2 = -0.016444
+        self.k_3 = -0.003015
+        self.k_4 = -0.000045
+        self.k_5 = -0.000043
         self.k_6 = 0.000005
 
 
@@ -243,11 +291,48 @@ class HuldCdTePanel(HuldPanel):
         self.k_6 = -0.000023
 
 
+CEC_PARAMETERS = {
+    "Mono-c-Si-Median": {
+        "alpha_sc": 0.004115,
+        "a_ref": 1.7775299999999998,
+        "I_L_ref": 8.809217,
+        "I_o_ref": 3.5804724999999997e-10,
+        "R_sh_ref": 403.829437,
+        "R_s": 0.328738,
+    },
+    "Multi-c-Si-Median": {
+        "alpha_sc": 0.004842,
+        "a_ref": 1.6408145,
+        "I_L_ref": 8.62885,
+        "I_o_ref": 4.499806e-10,
+        "R_sh_ref": 372.6818235,
+        "R_s": 0.3312325,
+    },
+    "Thin Film-Median": {
+        "alpha_sc": 0.0007440000000000001,
+        "a_ref": 2.8973619999999998,
+        "I_L_ref": 2.347423,
+        "I_o_ref": 4.378217e-12,
+        "R_sh_ref": 307.766388,
+        "R_s": 4.566184,
+    },
+}
+
+
+class SingleDiodePanelCecCsiMedian(SingleDiodePanel):
+    """Single diode panel using CEC median parameters for mono-c-Si panels."""
+
+    def __init__(self, **kwargs):
+        super().__init__(module_params=CEC_PARAMETERS["Mono-c-Si-Median"], **kwargs)
+
+
 _PANEL_TYPES = {
     "csi": HuldCSiPanel,
+    "csi-new": HuldCSiPanelUpdated,
     "cis": HuldCISPanel,
     "cdte": HuldCdTePanel,
     "singlediode": SingleDiodePanel,
+    "cec-csi-median": SingleDiodePanelCecCsiMedian,
 }
 
 
@@ -396,6 +481,7 @@ def run_model(
     # Run the panel model and return output
     irradiance = irrad.direct + irrad.diffuse
     output = panel.panel_power(irradiance, tamb)
+    relative_efficiency = panel.panel_relative_efficiency(irradiance, tamb)
     dc_out = pd.Series(output, index=datetimes).clip(upper=capacity)
 
     if inverter_capacity is None:
@@ -415,6 +501,8 @@ def run_model(
                 "direct": irrad.direct,
                 "diffuse": irrad.diffuse,
                 "temperature": tamb,
+                "module_temperature": panel.module_temperature(irradiance, tamb),
+                "relative_efficiency": relative_efficiency,
             }
         )
     else:
