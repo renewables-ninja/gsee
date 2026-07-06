@@ -133,7 +133,34 @@ def build_benchmarks(quick):
     ]
 
     if not quick:
+        lats_1000 = np.linspace(-70.0, 70.0, 1000)
+        lons_1000 = np.linspace(-180.0, 179.6, 1000)
+        dataset_1000 = xr.Dataset(
+            {
+                var: (
+                    ("time", "site"),
+                    np.tile(data[var].to_numpy()[:, None], (1, 1000)),
+                )
+                for var in ("global_horizontal", "diffuse_fraction", "temperature")
+            },
+            coords={
+                "time": data.index.tz_localize(None),
+                "site": np.arange(1000),
+                "lat": ("site", lats_1000),
+                "lon": ("site", lons_1000),
+            },
+        )
         benchmarks += [
+            (
+                "run_sites_csi_1000_sites",
+                lambda: api.run_sites(dataset_1000, **RUN_MODEL_PARAMS),
+            ),
+            (
+                "run_sites_csi_1000_sites_float32",
+                lambda: api.run_sites(
+                    dataset_1000, dtype="float32", **RUN_MODEL_PARAMS
+                ),
+            ),
             ("sun_angles_legacy", lambda: trigon.sun_angles_legacy(data.index, SITE)),
             (
                 "run_model_singlediode",

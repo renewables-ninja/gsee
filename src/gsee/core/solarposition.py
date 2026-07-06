@@ -74,6 +74,13 @@ def _sites(lat, lon):
     return lat, lon
 
 
+#: Results of `time_terms` keyed by content hash: chunked multi-site
+#: runs call it once per site chunk with identical time arrays, and the
+#: time-only terms are the expensive part of SPA
+_TIME_TERMS_CACHE = {}
+_TIME_TERMS_CACHE_SIZE = 8
+
+
 def time_terms(unixtime, delta_t=DELTA_T):
     """
     Location-independent part of NREL SPA for the given float unix
@@ -82,8 +89,16 @@ def time_terms(unixtime, delta_t=DELTA_T):
     ascension), `delta` (geocentric sun declination), and `xi`
     (equatorial horizontal parallax).
 
+    Results are cached (keyed by array content), so repeated calls with
+    the same times — e.g. one per site chunk — compute only once per
+    process. Callers must not mutate the returned arrays.
+
     """
     unixtime = np.atleast_1d(np.asarray(unixtime, dtype=float))
+    cache_key = (hash(unixtime.tobytes()), len(unixtime), float(delta_t))
+    cached = _TIME_TERMS_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
     jd = spa.julian_day(unixtime)
     jde = spa.julian_ephemeris_day(jd, delta_t)
     jc = spa.julian_century(jd)
@@ -111,7 +126,11 @@ def time_terms(unixtime, delta_t=DELTA_T):
     alpha = spa.geocentric_sun_right_ascension(lamd, epsilon, beta)
     delta = spa.geocentric_sun_declination(lamd, epsilon, beta)
     xi = spa.equatorial_horizontal_parallax(R)
-    return {"v": v, "alpha": alpha, "delta": delta, "xi": xi}
+    result = {"v": v, "alpha": alpha, "delta": delta, "xi": xi}
+    if len(_TIME_TERMS_CACHE) >= _TIME_TERMS_CACHE_SIZE:
+        _TIME_TERMS_CACHE.pop(next(iter(_TIME_TERMS_CACHE)))
+    _TIME_TERMS_CACHE[cache_key] = result
+    return result
 
 
 def topocentric_position(

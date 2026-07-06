@@ -221,6 +221,64 @@ def test_run_grid_matches_run_sites():
             )
 
 
+def test_float32_dtype(dataset):
+    float64 = api.run_sites(dataset, **CONFIGS["base"])
+    float32 = api.run_sites(dataset, dtype="float32", **CONFIGS["base"])
+    assert float32["pv"].dtype == np.float32
+    np.testing.assert_allclose(
+        float32["pv"].to_numpy(),
+        float64["pv"].to_numpy(),
+        atol=1.0,  # W, on 1000 W capacity
+        rtol=2e-3,
+    )
+    energy_64 = float(float64["pv"].sum())
+    assert abs(float(float32["pv"].sum()) - energy_64) / energy_64 < 1e-4
+
+
+def test_dtype_rejects_non_float(dataset):
+    with pytest.raises(ValueError, match="dtype"):
+        api.run_sites(dataset, dtype="int32", **CONFIGS["base"])
+
+
+def test_nan_steps_propagate(dataset):
+    modified = dataset.copy(deep=True)
+    modified["global_horizontal"].values[100:110, 1] = np.nan
+    result = api.run_sites(modified, **CONFIGS["base"])
+    clean = api.run_sites(dataset, **CONFIGS["base"])
+    pv = result["pv"].to_numpy()
+    assert np.isnan(pv[100:110, 1]).all()
+    unaffected = np.ones(pv.shape, dtype=bool)
+    unaffected[100:110, 1] = False
+    np.testing.assert_array_equal(pv[unaffected], clean["pv"].to_numpy()[unaffected])
+
+
+def test_all_nan_site_skipped(dataset):
+    modified = dataset.copy(deep=True)
+    for var in ("global_horizontal", "diffuse_fraction", "temperature"):
+        modified[var].values[:, 0] = np.nan
+    result = api.run_sites(modified, **CONFIGS["base"])
+    clean = api.run_sites(dataset, **CONFIGS["base"])
+    pv = result["pv"].to_numpy()
+    assert np.isnan(pv[:, 0]).all()
+    np.testing.assert_array_equal(pv[:, 1:], clean["pv"].to_numpy()[:, 1:])
+
+
+def test_fully_nan_dataset(dataset):
+    modified = dataset.copy(deep=True)
+    for var in ("global_horizontal", "diffuse_fraction", "temperature"):
+        modified[var].values[:] = np.nan
+    result = api.run_sites(modified, **CONFIGS["base"])
+    assert np.isnan(result["pv"].to_numpy()).all()
+
+
+def test_lazy_chunked_input_matches_eager(dataset):
+    pytest.importorskip("dask")
+    lazy = dataset.chunk({"site": 1})
+    result = api.run_sites(lazy, **CONFIGS["base"])
+    eager = api.run_sites(dataset, **CONFIGS["base"])
+    np.testing.assert_array_equal(result["pv"].to_numpy(), eager["pv"].to_numpy())
+
+
 @pytest.mark.reference
 def test_run_sites_physically_equivalent_to_reference():
     case_ids = sorted(c for c in cases.build_cases() if c.endswith("-base"))

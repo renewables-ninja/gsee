@@ -50,6 +50,9 @@ classifiers = [
 requires-python = ">=3.11"
 dynamic = ["version", "dependencies"]
 
+[project.optional-dependencies]
+climate = ["gsee-climate-data"]
+
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }
 version = { attr = "gsee._version.__version__" }
@@ -67,10 +70,13 @@ python = ">=3.12,<3.14"
 
 [tool.pixi.pypi-dependencies]
 gsee = { path = ".", editable = true }
+gsee-climate-data = { path = "packages/gsee-climate-data" }
 
 [tool.pixi.feature.dev.pypi-dependencies]
 pytest = ">=8.3"
 ruff = ">=0.8"
+dask = ">=2024"
+h5netcdf = ">=1.3"
 
 [tool.pixi.environments]
 default = { features = ["dev"], solve-group = "default" }

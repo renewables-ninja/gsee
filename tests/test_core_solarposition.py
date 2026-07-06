@@ -77,6 +77,17 @@ def test_sun_rise_set_close_to_iterative_spa(datetimes):
         assert diff.max() < 60, "{} differs by up to {}s".format(ref_col, diff.max())
 
 
+def test_time_terms_cached():
+    unixtime = np.arange(0.0, 86400.0, 3600.0) + 1.5e9
+    first = solarposition.time_terms(unixtime)
+    # Content-keyed: a copy of the same values hits the cache
+    assert solarposition.time_terms(unixtime.copy()) is first
+    assert solarposition.time_terms(unixtime, delta_t=68.0) is not first
+    for i in range(2 * solarposition._TIME_TERMS_CACHE_SIZE):
+        solarposition.time_terms(unixtime + (i + 1) * 60.0)
+    assert len(solarposition._TIME_TERMS_CACHE) <= solarposition._TIME_TERMS_CACHE_SIZE
+
+
 def test_risen_fraction_well_formed_at_polar_sites(datetimes):
     lats = np.array([78.25, 67.5, -75.0])
     lons = np.array([15.5, -21.0, 123.0])

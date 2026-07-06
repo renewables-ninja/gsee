@@ -9,6 +9,7 @@ User-facing API built on the vectorized `gsee.core`.
 
 """
 
+from collections import deque
 from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
@@ -19,6 +20,8 @@ from gsee.core import inverter, irradiance, panel, solarposition
 
 #: Default cap on elements per (time, site) chunk array (~64 MB float64)
 _DEFAULT_CHUNK_ELEMENTS = 8_000_000
+
+_RAW_DATA_VARIABLES = ("direct", "diffuse", "module_temperature", "relative_efficiency")
 
 
 def sun_angles_frame(datetime_index, coords, **kwargs):
@@ -90,11 +93,26 @@ def _compute_chunk(payload):
     """
     Full PV pipeline for one chunk of sites: solar angles, in-plane
     irradiance, panel DC power (clipped to capacity), inverter, system
-    losses. Semantics replicate `gsee.pv.run_model`. Top-level so it is
-    picklable for process-based parallelism.
+    losses. Semantics replicate `gsee.pv.run_model`, except that NaN
+    inputs yield NaN output (run_model silently yields 0). Top-level so
+    it is picklable for process-based parallelism.
+
+    Solar positions are always computed in float64 (SPA needs the
+    precision); with a float32 payload, everything downstream of the
+    angles runs and returns in float32.
 
     """
+    dtype = np.dtype(payload["dtype"])
     angles = solarposition.sun_angles(payload["times"], payload["lat"], payload["lon"])
+    if dtype != np.float64:
+        angles = {
+            key: (
+                value.astype(dtype)
+                if getattr(value, "dtype", None) == np.float64
+                else value
+            )
+            for key, value in angles.items()
+        }
     plane = irradiance.aperture_irradiance(
         payload["direct"],
         payload["diffuse"],
@@ -136,7 +154,38 @@ def _compute_chunk(payload):
             panel.relative_efficiency(total, tamb, *panel_args, **panel_kwargs),
             total.shape,
         )
-    return result
+
+    # NaN inputs must not masquerade as valid output: the irradiance
+    # step maps NaN to 0 internally (as run_model does), so mask here
+    nan_input = (
+        np.isnan(payload["direct"]) | np.isnan(payload["diffuse"]) | np.isnan(tamb)
+    )
+    return {
+        name: np.where(nan_input, np.nan, values).astype(dtype, copy=False)
+        for name, values in result.items()
+    }
+
+
+def _iter_chunk_results(payloads, workers):
+    """
+    Run chunk payloads sequentially (workers=1) or on a process pool,
+    keeping at most 2*workers chunks in flight so that lazily loaded
+    payloads do not all materialize in memory at once. Yields results
+    in submission order.
+
+    """
+    if workers <= 1:
+        for payload in payloads:
+            yield _compute_chunk(payload)
+        return
+    with ProcessPoolExecutor(max_workers=workers) as executor:
+        pending = deque()
+        for payload in payloads:
+            pending.append(executor.submit(_compute_chunk, payload))
+            while len(pending) >= 2 * workers:
+                yield pending.popleft().result()
+        while pending:
+            yield pending.popleft().result()
 
 
 def run_sites(
@@ -154,6 +203,7 @@ def run_sites(
     include_raw_data=False,
     chunk_size=None,
     workers=1,
+    dtype=None,
     **panel_kwargs,
 ):
     """
@@ -163,6 +213,14 @@ def run_sites(
     on `(time, site)` arrays: the time-dependent solar position terms
     are shared across sites, so per-site cost is ~20x lower than the
     single-site path.
+
+    Memory behaviour: input data is loaded one site chunk at a time —
+    pass a lazily loaded Dataset (e.g. from
+    `xr.open_dataset(..., chunks=...)` or an open zarr store) to
+    stream inputs from disk without materializing them all at once.
+    Sites without any finite irradiance data (e.g. ocean cells in
+    gridded climate data) are skipped entirely and returned as NaN;
+    timesteps with NaN inputs return NaN (not 0).
 
     Parameters
     ----------
@@ -200,8 +258,15 @@ def run_sites(
         (~8e6 array elements per chunk).
     workers : int, optional
         Number of worker processes; 1 (default) runs chunks
-        sequentially in-process. Note process startup imports gsee in
-        each worker, so parallelism pays off for large site counts.
+        sequentially in-process. At most 2*workers chunks are in
+        flight at a time. Note process startup imports gsee in each
+        worker, so parallelism pays off for large site counts.
+    dtype : str or numpy dtype, optional
+        float64 (default) or float32. With float32, inputs and
+        everything downstream of the solar position run in single
+        precision, halving memory; solar positions themselves are
+        always computed in float64. (The single-diode panel model
+        computes in float64 internally regardless.)
     panel_kwargs : passed on to the panel model (e.g. `c_temp_amb`,
         `c_temp_irrad` for Huld; `windspeed`, `temperature_params` for
         single-diode).
@@ -220,69 +285,92 @@ def run_sites(
     for coord in ("lat", "lon"):
         if coord not in data.coords:
             raise ValueError("data must have a '{}' coordinate on 'site'".format(coord))
+    dtype = np.dtype(np.float64 if dtype is None else dtype)
+    if dtype.kind != "f" or dtype.itemsize not in (4, 8):
+        raise ValueError("dtype must be float32 or float64")
 
     lat = np.asarray(data["lat"].to_numpy(), dtype=float)
     lon = np.asarray(data["lon"].to_numpy(), dtype=float)
     times = data["time"].to_index()
     n_time, n_site = len(times), len(lat)
 
-    ghi = data["global_horizontal"].transpose("time", "site").to_numpy()
-    diffuse_fraction = data["diffuse_fraction"].transpose("time", "site").to_numpy()
-    direct = ghi * (1 - diffuse_fraction)
-    diffuse = ghi * diffuse_fraction
-    if "temperature" in data:
-        tamb = data["temperature"].transpose("time", "site").to_numpy()
-    else:
-        tamb = np.full((n_time, n_site), panel.R_TAMB)
+    # Kept as DataArrays: chunks load their slice on demand, so lazily
+    # backed inputs (dask/zarr) are streamed rather than materialized
+    ghi = data["global_horizontal"].transpose("time", "site")
+    diffuse_fraction = data["diffuse_fraction"].transpose("time", "site")
+    temperature = (
+        data["temperature"].transpose("time", "site") if "temperature" in data else None
+    )
 
-    tilt = np.radians(_per_site(tilt, lat, "tilt"))
-    azimuth = np.radians(_per_site(azim, lat, "azim"))
-    capacity = _per_site(capacity, lat, "capacity")
+    # Sites with no finite irradiance data at all (e.g. ocean cells in
+    # gridded climate data) are not computed and stay NaN in the output
+    finite = np.isfinite(ghi).any("time") & np.isfinite(diffuse_fraction).any("time")
+    valid_sites = np.nonzero(finite.to_numpy())[0]
+
+    tilt = np.radians(_per_site(tilt, lat, "tilt")).astype(dtype)
+    azimuth = np.radians(_per_site(azim, lat, "azim")).astype(dtype)
+    capacity = _per_site(capacity, lat, "capacity").astype(dtype)
     if inverter_capacity is None:
         inverter_capacity = capacity
     else:
-        inverter_capacity = _per_site(inverter_capacity, lat, "inverter_capacity")
-    albedo = _per_site(albedo, lat, "albedo")
+        inverter_capacity = _per_site(
+            inverter_capacity, lat, "inverter_capacity"
+        ).astype(dtype)
+    albedo = _per_site(albedo, lat, "albedo").astype(dtype)
 
     if chunk_size is None:
         chunk_size = max(1, _DEFAULT_CHUNK_ELEMENTS // max(n_time, 1))
-    starts = range(0, n_site, chunk_size)
-    payloads = [
-        {
-            "times": times.values,
-            "lat": lat[s : s + chunk_size],
-            "lon": lon[s : s + chunk_size],
-            "direct": direct[:, s : s + chunk_size],
-            "diffuse": diffuse[:, s : s + chunk_size],
-            "tamb": tamb[:, s : s + chunk_size],
-            "tilt": tilt[s : s + chunk_size],
-            "azimuth": azimuth[s : s + chunk_size],
-            "capacity": capacity[s : s + chunk_size],
-            "inverter_capacity": inverter_capacity[s : s + chunk_size],
-            "albedo": albedo[s : s + chunk_size],
-            "tracking": tracking,
-            "technology": technology,
-            "module_params": module_params,
-            "use_inverter": use_inverter,
-            "system_loss": system_loss,
-            "include_raw_data": include_raw_data,
-            "panel_kwargs": panel_kwargs,
-        }
-        for s in starts
+    selections = [
+        valid_sites[start : start + chunk_size]
+        for start in range(0, len(valid_sites), chunk_size)
     ]
 
-    if workers > 1 and len(payloads) > 1:
-        with ProcessPoolExecutor(max_workers=workers) as executor:
-            chunk_results = list(executor.map(_compute_chunk, payloads))
-    else:
-        chunk_results = [_compute_chunk(payload) for payload in payloads]
+    def _payloads():
+        for sel in selections:
+            ghi_chunk = ghi.isel(site=sel).to_numpy().astype(dtype, copy=False)
+            fraction_chunk = (
+                diffuse_fraction.isel(site=sel).to_numpy().astype(dtype, copy=False)
+            )
+            if temperature is not None:
+                tamb_chunk = (
+                    temperature.isel(site=sel).to_numpy().astype(dtype, copy=False)
+                )
+            else:
+                tamb_chunk = np.full((n_time, len(sel)), panel.R_TAMB, dtype=dtype)
+            yield {
+                "times": times.values,
+                "lat": lat[sel],
+                "lon": lon[sel],
+                "direct": ghi_chunk * (1 - fraction_chunk),
+                "diffuse": ghi_chunk * fraction_chunk,
+                "tamb": tamb_chunk,
+                "tilt": tilt[sel],
+                "azimuth": azimuth[sel],
+                "capacity": capacity[sel],
+                "inverter_capacity": inverter_capacity[sel],
+                "albedo": albedo[sel],
+                "tracking": tracking,
+                "technology": technology,
+                "module_params": module_params,
+                "use_inverter": use_inverter,
+                "system_loss": system_loss,
+                "include_raw_data": include_raw_data,
+                "panel_kwargs": panel_kwargs,
+                "dtype": dtype.str,
+            }
+
+    names = ["pv"] + (list(_RAW_DATA_VARIABLES) if include_raw_data else [])
+    outputs = {name: np.full((n_time, n_site), np.nan, dtype=dtype) for name in names}
+    effective_workers = workers if len(selections) > 1 else 1
+    for sel, chunk in zip(
+        selections, _iter_chunk_results(_payloads(), effective_workers)
+    ):
+        for name, values in chunk.items():
+            outputs[name][:, sel] = values
 
     result = xr.Dataset(coords=data.coords)
-    for name in chunk_results[0]:
-        result[name] = (
-            ("time", "site"),
-            np.concatenate([chunk[name] for chunk in chunk_results], axis=1),
-        )
+    for name in names:
+        result[name] = (("time", "site"), outputs[name])
     result["pv"].attrs["unit"] = "W"
     return result
 
@@ -292,6 +380,10 @@ def run_grid(data, *args, **kwargs):
     Run the PV model over a regular lat/lon grid: `data` has dimensions
     `(time, lat, lon)`; the grid is stacked to a flat site axis, run
     through `run_sites` (same parameters), and unstacked again.
+
+    Cells without any finite irradiance data (e.g. ocean cells in
+    gridded climate data) are skipped and returned as NaN, so masked
+    global grids only pay for their land cells.
 
     Returns an xarray.Dataset with `pv` over (time, lat, lon).
 

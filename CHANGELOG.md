@@ -2,8 +2,10 @@
 
 ## 0.4.0 (dev)
 
-- Added: multi-site API with two functions, `gsee.api.run_sites` (xarray Dataset over `(time, site)`) and `gsee.api.run_grid` (`(time, lat, lon)`), with per-site parameters (including callable tilt), site chunking for memory control, and optional parallel processes.
+- Added: multi-site API with two functions, `gsee.api.run_sites` (xarray Dataset over `(time, site)`) and `gsee.api.run_grid` (`(time, lat, lon)`), with per-site parameters (including callable tilt), site chunking for memory control, and optional parallel processes. The `dtype="float32"` option for `run_sites`/`run_grid` allows halving memory use downstream of the (always float64) solar position computation. `run_sites`/`run_grid` load input data one site chunk at a time, so lazily-backed datasets (`xr.open_dataset(..., chunks=...)`, zarr) stream from disk.
 - Added: vectorized core modules `gsee.core.irradiance` , `gsee.core.panel`, `gsee.core.inverter`, and `gsee.core.diffuse`
+- Added: climate data interface rebuilt on the vectorized core as `gsee.climate.run_climate`
+- Added: the time-dependent SPA terms are cached per time index, so repeated computations over the same times only compute them once
 - Fixed: two long-standing units bugs in the BRL diffuse-fraction model: apparent solar time was fed to the model in radians (`ephem.hours` floats are radians), and solar altitude was fed in radians, evaluated once at midnight instead of per hour. The correction raises the mean estimated diffuse fraction by ~+0.06, changing annual PV output by roughly -1.3% to -2.5% (fixed tilt).
 - Added: vectorized multi-site solar position in `gsee.core.solarposition`
 - Added: `gsee.api.sun_angles_frame`, a single-site sun angle calculation from the vectorized core, usable via `run_model(angles=...)`. This is equivalent to `trigon.sun_angles`.
