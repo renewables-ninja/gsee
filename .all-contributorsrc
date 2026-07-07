@@ -1,0 +1,74 @@
+{
+  "projectName": "gsee",
+  "projectOwner": "renewables-ninja",
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "files": [
+    "README.md",
+    "docs/index.md"
+  ],
+  "imageSize": 100,
+  "commit": false,
+  "commitConvention": "none",
+  "contributors": [
+    {
+      "login": "sjpfenninger",
+      "name": "Stefan Pfenninger-Lee",
+      "avatar_url": "https://avatars.githubusercontent.com/u/141709?v=4",
+      "profile": "https://github.com/sjpfenninger",
+      "contributions": [
+        "code",
+        "ideas"
+      ]
+    },
+    {
+      "login": "iain-staffell",
+      "name": "Iain Staffell",
+      "avatar_url": "https://avatars.githubusercontent.com/u/30894186?v=4",
+      "profile": "https://github.com/iain-staffell",
+      "contributions": [
+        "ideas"
+      ]
+    },
+    {
+      "login": "muelljoh",
+      "name": "Johannes",
+      "avatar_url": "https://avatars.githubusercontent.com/u/42338028?v=4",
+      "profile": "https://github.com/muelljoh",
+      "contributions": [
+        "code",
+        "ideas"
+      ]
+    },
+    {
+      "login": "tsaoyu",
+      "name": "Tony Yu Cao",
+      "avatar_url": "https://avatars.githubusercontent.com/u/6488896?v=4",
+      "profile": "https://www.tsaoyu.com/",
+      "contributions": [
+        "bug"
+      ]
+    },
+    {
+      "login": "jwohland",
+      "name": "Jan Wohland",
+      "avatar_url": "https://avatars.githubusercontent.com/u/20681098?v=4",
+      "profile": "https://github.com/jwohland",
+      "contributions": [
+        "bug"
+      ]
+    },
+    {
+      "login": "LinhHo",
+      "name": "Linh Ho",
+      "avatar_url": "https://avatars.githubusercontent.com/u/45103089?v=4",
+      "profile": "https://github.com/LinhHo",
+      "contributions": [
+        "code",
+        "ideas"
+      ]
+    }
+  ],
+  "contributorsPerLine": 7,
+  "linkToUsage": false
+}
