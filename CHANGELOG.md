@@ -2,6 +2,8 @@
 
 ## 0.4.0 (dev)
 
+- Correctly route `temperature_correction_method` through all entry points (`pv.run_model`, `api.run_sites`/`run_grid`, `climate.run_climate`)
+- Modified: `gsee.legacy` now carries its own frozen copy of the pre-0.4 panel and inverter models
 - Added: multi-site API with two functions, `gsee.api.run_sites` (xarray Dataset over `(time, site)`) and `gsee.api.run_grid` (`(time, lat, lon)`), with per-site parameters (including callable tilt), site chunking for memory control, and optional parallel processes. The `dtype="float32"` option for `run_sites`/`run_grid` allows halving memory use downstream of the (always float64) solar position computation. `run_sites`/`run_grid` load input data one site chunk at a time, so lazily-backed datasets (`xr.open_dataset(..., chunks=...)`, zarr) stream from disk.
 - Added: vectorized core modules `gsee.core.irradiance` , `gsee.core.panel`, `gsee.core.inverter`, and `gsee.core.diffuse`
 - Modified: `pv.run_model` is now wired through the vectorized core, making runs about 20 times faster, but with a small deviation due to the switch to (more accurate) sun position calculations

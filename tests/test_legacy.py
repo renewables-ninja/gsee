@@ -251,3 +251,24 @@ def test_aperture_irradiance_tracking_2(irradiance, coords_and_datetimes):
     assert result.mean()["direct"] == pytest.approx(260.794548)
     assert result.mean()["diffuse"] == pytest.approx(58.169965)
     assert result.loc["2000-12-31 12:00:00", "direct"] == pytest.approx(1448.534620)
+
+
+def test_legacy_panel_classes_are_frozen_copies():
+    # gsee.legacy must not depend on the current gsee.pv panel classes:
+    # changes to gsee.pv defaults must not leak into legacy results
+    import gsee.pv
+    from gsee.legacy import panel as legacy_panel
+    from gsee.legacy.pv import _PANEL_TYPES
+
+    for technology, panel_class in _PANEL_TYPES.items():
+        assert panel_class is getattr(legacy_panel, panel_class.__name__)
+        assert panel_class is not getattr(gsee.pv, panel_class.__name__)
+
+
+def test_legacy_huld_efficiency_uncapped():
+    from gsee.legacy import panel as legacy_panel
+
+    eff = legacy_panel.HuldCSiPanel().panel_relative_efficiency(
+        pd.Series([1000.0]), pd.Series([-15.0])
+    )
+    assert eff.iloc[0] == pytest.approx(1.02353)

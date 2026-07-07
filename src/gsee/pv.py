@@ -27,6 +27,7 @@ import pandas as pd
 import pvlib
 
 from gsee import api, cec_tools
+from gsee.core.panel import _check_temperature_correction_method
 
 # Constants
 R_TAMB = 20  # Reference ambient temperature (degC)
@@ -142,6 +143,7 @@ class SingleDiodePanel(PVPanel):
         All parameters can be either float or pandas.Series.
 
         """
+        _check_temperature_correction_method(temperature_correction_method)
         if windspeed is None:
             windspeed = self.ref_windspeed
         if isinstance(self.temperature_params, str):
@@ -151,15 +153,12 @@ class SingleDiodePanel(PVPanel):
 
         cell_temperature = self.module_temperature(irradiance, tamb, windspeed)
 
-        if temperature_correction_method == "clip_low_temperature":
-            cell_temperature = cell_temperature.clip(lower=0)
-
         efficiency = cec_tools.relative_eff(
             irradiance, cell_temperature, self.module_params
         )
 
         if temperature_correction_method == "clip_high_efficiency":
-            efficiency[efficiency > 1] = 1
+            efficiency = efficiency.clip(upper=1.0)
 
         return efficiency
 
@@ -188,7 +187,7 @@ class HuldPanel(PVPanel):
         return self.c_temp_tamb * tamb + self.c_temp_irrad * irradiance
 
     def panel_relative_efficiency(
-        self, irradiance, tamb, temperature_correction_method="clip_high_efficiency"
+        self, irradiance, tamb, temperature_correction_method=None
     ):
         """
         Returns the relative conversion efficiency modifier as a
@@ -204,16 +203,13 @@ class HuldPanel(PVPanel):
             Ambient temperature in deg C
 
         """
+        _check_temperature_correction_method(temperature_correction_method)
         # G_: normalized in-plane irradiance
         G_ = irradiance / R_IRRADIANCE
         # T_: normalized module temperature
         T_ = self.module_temperature(irradiance, tamb) - R_TMOD
         # NB: np.log without base implies base e or ln
         # Catching warnings to suppress "RuntimeWarning: invalid value encountered in log"
-
-        if temperature_correction_method == "clip_low_temperature":
-            T_ = T_.clip(lower=0)
-
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             eff = (
@@ -226,10 +222,8 @@ class HuldPanel(PVPanel):
         eff = eff.fillna(0)  # NaNs in case that G_ was <= 0
         eff[eff < 0] = 0  # Also make sure efficiency can't be negative
 
-        # eff[eff > 1] = np.cbrt(eff[eff > 1])  # Efficiency above 1.0 is tempered with cubic root
-
         if temperature_correction_method == "clip_high_efficiency":
-            eff[eff > 1] = 1
+            eff = eff.clip(upper=1.0)
 
         return eff
 
@@ -440,7 +434,9 @@ def run_model(
         replicating older simulation runs.
     kwargs : additional kwargs passed on to the panel model (e.g.
         `c_temp_amb`, `c_temp_irrad` for the Huld panels; `windspeed`,
-        `temperature_params`, `module_params` for single-diode).
+        `temperature_params`, `module_params` for single-diode;
+        `temperature_correction_method="clip_high_efficiency"` to cap
+        relative efficiency at 1.0).
 
     Returns
     -------

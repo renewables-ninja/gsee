@@ -276,7 +276,8 @@ def run_sites(
         computes in float64 internally regardless.)
     panel_kwargs : passed on to the panel model (e.g. `c_temp_amb`,
         `c_temp_irrad` for Huld; `windspeed`, `temperature_params` for
-        single-diode).
+        single-diode; `temperature_correction_method=
+        "clip_high_efficiency"` to cap relative efficiency at 1.0).
 
     Returns
     -------

@@ -84,6 +84,57 @@ def test_include_raw_data_columns(data):
     )
 
 
+@pytest.fixture
+def cold_sunny_data():
+    index = pd.date_range("2019-01-15", periods=24, freq="h", tz="UTC")
+    return pd.DataFrame(
+        {"global_horizontal": 400.0, "diffuse_fraction": 0.2, "temperature": -15.0},
+        index=index,
+    )
+
+
+def test_cold_relative_efficiency_exceeds_one(cold_sunny_data):
+    # Efficiency above 1.0 at cold module temperatures is physically
+    # expected and must not be capped by default
+    result = pv.run_model(
+        cold_sunny_data, coords=COORDS, include_raw_data=True, **CONFIG
+    )
+    assert result["relative_efficiency"].max() > 1.0
+
+
+def test_clip_high_efficiency_caps_at_one(cold_sunny_data):
+    capped = pv.run_model(
+        cold_sunny_data,
+        coords=COORDS,
+        include_raw_data=True,
+        temperature_correction_method="clip_high_efficiency",
+        **CONFIG,
+    )
+    assert capped["relative_efficiency"].max() == 1.0
+    uncapped = pv.run_model(cold_sunny_data, coords=COORDS, **CONFIG)
+    assert (capped["output"] <= uncapped + 1e-9).all()
+
+
+def test_unknown_temperature_correction_method_raises(cold_sunny_data):
+    with pytest.raises(ValueError, match="temperature_correction_method"):
+        pv.run_model(
+            cold_sunny_data,
+            coords=COORDS,
+            temperature_correction_method="clip_low_temperature",
+            **CONFIG,
+        )
+
+
+def test_all_technologies_gain_efficiency_when_cold():
+    from gsee.core import panel
+
+    for technology in ["csi", "csi-new", "cis", "cdte", "cec-csi-median"]:
+        efficiency = panel.relative_efficiency(
+            np.array([1000.0]), np.array([-15.0]), technology
+        )
+        assert efficiency[0] > 1.0, technology
+
+
 def test_non_utc_index_raises(data):
     shifted = data.tz_convert("Europe/Zurich")
     with pytest.raises(ValueError, match="UTC"):

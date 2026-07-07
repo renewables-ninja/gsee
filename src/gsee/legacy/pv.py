@@ -7,7 +7,7 @@ import math
 import pandas as pd
 
 from gsee.legacy import trigon
-from gsee.pv import _PANEL_TYPES, R_TAMB, Inverter
+from gsee.legacy.panel import _PANEL_TYPES, R_TAMB, Inverter
 
 
 def run_model(

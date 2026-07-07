@@ -2,11 +2,8 @@
 PV panel models, vectorized over (time, site)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The Huld et al. (2010) empirical model (same coefficient sets as the
-panel classes in `gsee.pv`) and the pvlib single-diode model, as pure
-functions on numpy arrays of any shape. Semantics mirror `gsee.pv`:
-Huld relative efficiency is clipped to [0, 1]; single-diode relative
-efficiency is left unclipped.
+The Huld et al. (2010) empirical model and the pvlib single-diode model,
+as pure functions on numpy arrays of any shape.
 
 """
 
@@ -32,6 +29,17 @@ HULD_COEFFICIENTS = {
 HULD_TECHNOLOGIES = frozenset(HULD_COEFFICIENTS)
 SINGLEDIODE_TECHNOLOGIES = frozenset(["singlediode", "cec-csi-median"])
 
+TEMPERATURE_CORRECTION_METHODS = (None, "clip_high_efficiency")
+
+
+def _check_temperature_correction_method(method):
+    if method not in TEMPERATURE_CORRECTION_METHODS:
+        raise ValueError(
+            "Unknown temperature_correction_method: {!r}; must be one of {}".format(
+                method, TEMPERATURE_CORRECTION_METHODS
+            )
+        )
+
 
 def huld_module_temperature(irradiance, tamb, c_temp_amb=1.0, c_temp_irrad=0.035):
     """Module temperature estimate of the Huld model (degC)."""
@@ -39,14 +47,22 @@ def huld_module_temperature(irradiance, tamb, c_temp_amb=1.0, c_temp_irrad=0.035
 
 
 def huld_relative_efficiency(
-    irradiance, tamb, technology="csi", c_temp_amb=1.0, c_temp_irrad=0.035
+    irradiance,
+    tamb,
+    technology="csi",
+    c_temp_amb=1.0,
+    c_temp_irrad=0.035,
+    temperature_correction_method=None,
 ):
     """
-    Relative conversion efficiency of the Huld model, clipped to
-    [0, 1] (the `clip_high_efficiency` default of `gsee.pv.HuldPanel`).
-    Zero where irradiance is zero or negative.
+    Relative conversion efficiency of the Huld model. Zero where
+    irradiance is zero or negative; never negative. Values above 1.0
+    at cold module temperatures are physically expected and returned
+    as-is by default; `temperature_correction_method=
+    "clip_high_efficiency"` caps the result at 1.0.
 
     """
+    _check_temperature_correction_method(temperature_correction_method)
     k_1, k_2, k_3, k_4, k_5, k_6 = HULD_COEFFICIENTS[technology]
     g = irradiance / R_IRRADIANCE
     t = huld_module_temperature(irradiance, tamb, c_temp_amb, c_temp_irrad) - R_TMOD
@@ -59,7 +75,10 @@ def huld_relative_efficiency(
             + t * (k_3 + k_4 * log_g + k_5 * log_g**2)
             + k_6 * t**2
         )
-    return np.clip(np.where(np.isnan(eff), 0.0, eff), 0.0, 1.0)
+    eff = np.clip(np.where(np.isnan(eff), 0.0, eff), 0.0, None)
+    if temperature_correction_method == "clip_high_efficiency":
+        eff = np.clip(eff, None, 1.0)
+    return eff
 
 
 def _resolve_temperature_params(temperature_params):
@@ -86,14 +105,14 @@ def singlediode_relative_efficiency(
     module_params,
     windspeed=R_WINDSPEED,
     temperature_params="open_rack_glass_glass",
+    temperature_correction_method=None,
 ):
     """
-    Relative efficiency via the pvlib single-diode model, unclipped
-    (matching `gsee.pv.SingleDiodePanel` defaults). Works on arrays of
-    any shape by flattening through `cec_tools.relative_eff` (which
-    requires a pandas Series).
+    Relative efficiency via the pvlib single-diode model. Works on arrays of any
+    shape by flattening through `cec_tools.relative_eff` (which requires a pandas Series).
 
     """
+    _check_temperature_correction_method(temperature_correction_method)
     irradiance = np.asarray(irradiance, dtype=float)
     cell_temperature = np.broadcast_to(
         np.asarray(
@@ -109,7 +128,10 @@ def singlediode_relative_efficiency(
         pd.Series(cell_temperature.ravel()),
         module_params,
     )
-    return efficiency.to_numpy().reshape(irradiance.shape)
+    efficiency = efficiency.to_numpy().reshape(irradiance.shape)
+    if temperature_correction_method == "clip_high_efficiency":
+        efficiency = np.clip(efficiency, None, 1.0)
+    return efficiency
 
 
 def panel_power(
