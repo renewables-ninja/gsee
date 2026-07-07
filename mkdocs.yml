@@ -7,6 +7,7 @@ theme:
     logo: ninja.png
     favicon: favicon.ico
     features:
+        - navigation.indexes
         - navigation.tabs
         - navigation.tabs.sticky
         - navigation.top
@@ -17,8 +18,14 @@ repo_url: https://github.com/renewables-ninja/gsee/
 edit_uri: ""
 
 nav:
-    - Introduction: index.md
-    - Multi-site simulations: multi-site.md
+    - Introduction:
+        - index.md
+        - Migrating from v0.3: migrating.md
+    - Running:
+        - running/index.md
+        - PV models: running/pv-models.md
+        - Multi-site simulations: running/multi-site.md
+        - Legacy options: running/legacy.md
     - Climate data interface: climatedata-interface.md
     - Development: development.md
 

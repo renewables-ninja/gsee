@@ -9,113 +9,109 @@
 
 <br>
 
-`GSEE` is a solar energy simulation library designed for rapid calculations and ease of use. [Renewables.ninja](https://www.renewables.ninja/) uses `GSEE`.
+`GSEE` is a solar energy simulation library designed for rapid calculations and ease of use, from a single site with a pandas DataFrame to hundreds of thousands of sites or global grids with xarray Datasets. [Renewables.ninja](https://www.renewables.ninja/) uses `GSEE`.
 
-The development of `GSEE` predates the existence of [`pvlib-python`](https://pvlib-python.readthedocs.io/) but builds on its functionality as of v0.4.0. Use `GSEE` if you want fast simulations with sensible defaults and solar energy technologies other than PV, and `pvlib-python` if you need control over the nuts and bolts of simulating PV systems.
+The development of `GSEE` predates the existence of [`pvlib-python`](https://pvlib-python.readthedocs.io/) but builds on its functionality as of v0.4.0. Use `GSEE` if you want fast simulations with sensible defaults, and `pvlib-python` if you need control over the nuts and bolts of simulating PV systems.
+
+Upgrading from an older version? See the [guide on migrating from v0.3 to v0.4](migrating.md).
 
 ## Installation
 
-`GSEE` requires Python 3. The recommended way to install is through the [Anaconda Python distribution](https://www.continuum.io/downloads) and `conda-forge`:
+    pip install gsee
 
-    conda install -c conda-forge gsee
+To also install the built-in irradiance probability density functions used by the [climate data interface](climatedata-interface.md) (the `gsee-climate-data` companion package):
 
-You can also install with `pip install gsee`, but if you do so, and do not already have `numpy` installed, you will get a compiler error when pip tries to build to `climatedata_interface` Cython extension.
+    pip install gsee[climate]
 
-### Development version
+`GSEE` is also available via `conda-forge` (`conda install -c conda-forge gsee`); the `gsee-climate-data` companion package must currently be installed with `pip`.
 
-To install the latest development version directly from GitHub:
-
-    pip install -e git+https://github.com/renewables-ninja/gsee.git#egg=gsee
-
-To build the `climatedata_interface` submodule [Cython >= 0.28.5](http://cython.org/) is required.
+See [Development](development.md) for installing a development build.
 
 ## Functionality
 
-The following submodules are available:
+There are three entry points, from single sites to global grids:
 
-* __``brl_model``__: an implementation of the BRL model, a method to derive the diffuse fraction of irradiance, based on Ridley et al. (2010)
-* __``climatedata_interface``__: an interface to use GSEE with annual, seasonal, monthly or daily data. See [Climate Data Interface](climatedata-interface.md) for details.
-* __``pv``__: electric output from PV a panel
-* __``trigon``__: functions to calculate irradiance on an inclined plane
+- **Single site**: [`gsee.pv.run_model()`](running/index.md) simulates one PV system from a pandas DataFrame of hourly irradiance data.
+- **Many sites or grids**: [`gsee.api.run_sites()` and `gsee.api.run_grid()`](running/multi-site.md) simulate many sites at once on a vectorized computation core, at roughly 20x lower per-site cost than the single-site path, with chunked and optionally parallel execution.
+- **Climate data**: [`gsee.climate.run_climate()`](climatedata-interface.md) runs the PV model directly on gridded climate data at annual, seasonal, monthly, daily or hourly resolution, synthesizing hourly irradiance where needed.
 
-A model can be imported like this: ``import gsee.pv``
+Underneath sit the lower-level modules:
 
-A plant simulation model implements a model class (e.g. ``PVPlant``) with the relevant settings, and a ``run_model()`` function that take time series data (a pandas Series) and runs a default instance of the model class, but can also take a ``model`` argument to specify a custom-configured model instance.
+- **`gsee.core`**: the vectorized multi-site computation core (solar position, plane-of-array irradiance, panel and inverter models, diffuse-fraction estimation, hourly synthesis) operating on `(time, site)` numpy arrays.
+- **`gsee.legacy`**: the frozen pre-0.4 single-site implementation (ephem-based solar positions and the original BRL diffuse-fraction model), kept only to replicate older simulation runs; requires the optional `legacy` extra (`pip install gsee[legacy]`), see [Legacy options](running/legacy.md).
 
 ## Examples
 
 ### Power output from a PV system with fixed panels
 
-In this example, ``data`` must be a pandas.DataFrame with columns ``global_horizontal`` (in W/m2), ``diffuse_fraction``, and optionally a ``temperature`` column for ambient air temperature (in degrees Celsius).
+`data` must be a pandas.DataFrame with columns `global_horizontal` (in W/m2), `diffuse_fraction`, and optionally a `temperature` column for ambient air temperature (in degrees Celsius), indexed with a timezone-aware UTC DatetimeIndex.
 
 ```python
 result = gsee.pv.run_model(
     data,
     coords=(22.78, 5.51),  # Latitude and longitude
-    tilt=30, # 30 degrees tilt angle
+    tilt=30,  # 30 degrees tilt angle
     azim=180,  # facing towards equator,
     tracking=0,  # fixed - no tracking
     capacity=1000,  # 1000 W
 )
 ```
 
-### Aperture irradiance on a panel with 2-axis tracking
+### Power output from many sites at once
 
 ```python
-location = (22.78, 5.51)
-plane_irradiance = gsee.trigon.aperture_irradiance(
-    data['direct_horizontal'], data['diffuse_horizontal'],
-    location, tracking=2
+result = gsee.api.run_sites(
+    dataset,  # xarray.Dataset over (time, site), see the multi-site documentation
+    tilt=30,
+    azim=180,
+    tracking=0,
+    capacity=1000,
 )
 ```
 
-### Climate data Interface
+See [Multi-site simulations](running/multi-site.md) for the input format and the scaling options (chunking, worker processes, float32 mode, streaming input data from disk).
 
-Example use directly reading NetCDF files with GHI, diffuse irradiance fraction, and temperature data:
+### In-plane irradiance and other intermediate results
+
+`include_raw_data=True` returns a DataFrame that includes the in-plane direct and diffuse irradiance, module temperature and relative efficiency alongside the power output:
 
 ```python
-from gsee.climatedata_interface.interface import run_interface
+result = gsee.pv.run_model(
+    data,
+    coords=(22.78, 5.51),
+    tilt=30,
+    azim=180,
+    tracking=2,  # 2-axis tracking
+    capacity=1000,
+    include_raw_data=True,
+)
+plane_irradiance = result[["direct", "diffuse"]]
+```
 
-run_interface(
-    ghi_data=('ghi_input.nc', 'ghi'),  # Tuple of (input file path, variable name)
-    diffuse_data=('diffuse_fraction_input.nc', 'diff_frac'),
-    temp_data=('temperature_input.nc', 't2m'),
-    outfile='output_file.nc',
-    params=dict(tilt=35, azim=180, tracking=0, capacity=1000),
-    frequency='detect'
+### PV output from gridded monthly climate data
+
+```python
+result = gsee.climate.run_climate(
+    dataset,  # xarray.Dataset over (time, lat, lon) with monthly mean irradiance
+    tilt=35,
+    azim=180,
+    tracking=0,
+    capacity=1000,
+    pdfs="builtin",  # requires `pip install gsee[climate]`
 )
 ```
 
-Tilt can be given as a latitude-dependent function instead of static value:
-
-```python
-params = dict(tilt=lambda lat: 0.35396 * lat + 16.84775, ...)
-```
-
-Instead of letting the climate data interface read and prepare data from NetCDF files, an `xarray.Dataset` can also be passed directly (e.g. when using the module in combination with a larger application):
-
-```python
-from gsee.climatedata_interface.interface import run_interface_from_dataset
-
-result = run_interface_from_dataset(
-    data=my_dataset,  # my_dataset is an xarray.Dataset
-    params=dict(tilt=35, azim=180, tracking=0, capacity=1000)
-)
-```
-
-By default, a built-in file with monthly probability density functions is automatically downloaded and used to generate synthetic daily irradiance.
-
-For more information, see the [climate data interface documentation](climatedata-interface.md).
+See the [climate data interface documentation](climatedata-interface.md) for details.
 
 ## Credits and contact
 
-Contact [Stefan Pfenninger](mailto:stefan.pfenninger@usys.ethz.ch) for questions about `GSEE`. `GSEE` is also a component of the [Renewables.ninja](https://www.renewables.ninja) project, developed by Stefan Pfenninger and Iain Staffell. Use the [contact page](https://www.renewables.ninja/about) there if you want more information about Renewables.ninja.
+Contact [Stefan Pfenninger](mailto:s.pfenninger@tudelft.nl) for questions about `GSEE`. `GSEE` is also a component of the [Renewables.ninja](https://www.renewables.ninja) project, developed by Stefan Pfenninger and Iain Staffell. Use the [contact page](https://www.renewables.ninja/about) there if you want more information about Renewables.ninja.
 
 ## Citation
 
 If you use `GSEE` or code derived from it in academic work, please cite:
 
-Stefan Pfenninger and Iain Staffell (2016). Long-term patterns of European PV output using 30 years of validated hourly reanalysis and satellite data. *Energy* 114, pp. 1251-1265. [doi: 10.1016/j.energy.2016.08.060](https://doi.org/10.1016/j.energy.2016.08.060)
+Stefan Pfenninger and Iain Staffell (2016). Long-term patterns of European PV output using 30 years of validated hourly reanalysis and satellite data. _Energy_ 114, pp. 1251-1265. [doi: 10.1016/j.energy.2016.08.060](https://doi.org/10.1016/j.energy.2016.08.060)
 
 ## License
 
