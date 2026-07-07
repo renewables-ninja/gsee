@@ -292,6 +292,15 @@ class TestFrequencyDetection:
         with pytest.raises(ValueError, match="detect"):
             climate.detect_frequency(data)
 
+    @pytest.mark.parametrize("frequency", ["detect", "H"])
+    def test_sub_hourly_raises(self, frequency):
+        # The climate interface is hourly-and-coarser only; sub-hourly
+        # data with a diffuse_fraction goes directly to run_sites/run_model
+        times = pd.date_range("2019-01-01", periods=48, freq="30min")
+        data = xr.Dataset(coords={"time": times})
+        with pytest.raises(ValueError, match="hourly and coarser"):
+            climate.detect_frequency(data, frequency)
+
     def test_parse_cmip_time(self):
         parsed = climate.parse_cmip_time([20070104.5, 20070105.0])
         assert parsed[0] == pd.Timestamp("2007-01-04 12:00")

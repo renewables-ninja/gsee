@@ -394,7 +394,8 @@ def run_model(
         Must contain columns 'global_horizontal' (in W/m2)
         and 'diffuse_fraction', and may contain a 'temperature' column
         for ambient air temperature (in deg C). The index must be a
-        uniformly spaced DatetimeIndex in UTC. Timesteps with NaN
+        uniformly spaced DatetimeIndex in UTC; any uniform resolution,
+        hourly or finer, is supported. Timesteps with NaN
         inputs return NaN (before v0.4 they silently returned 0).
     coords : (float, float) tuple
         Latitude and longitude.
@@ -441,7 +442,7 @@ def run_model(
     Returns
     -------
     result : pandas Series
-        Electric output from PV system in each hour (W).
+        Electric output from PV system per timestep (W).
 
     """
     if legacy_solarposition or (angles is not None and "duration" in angles.columns):
@@ -483,6 +484,15 @@ def run_model(
         if not angles.index.equals(data.index):
             raise ValueError("angles must have the same index as data")
         angles_arrays = _angles_arrays(angles)
+
+    if "global_horizontal" not in data.columns:
+        raise ValueError("data must contain a 'global_horizontal' column")
+    if "diffuse_fraction" not in data.columns:
+        raise ValueError(
+            "data must contain a 'diffuse_fraction' column (to estimate it "
+            "from hourly global horizontal irradiance with the BRL model, "
+            "use the climate data interface, gsee.climate.run_climate)"
+        )
 
     ghi = data["global_horizontal"].to_numpy(dtype=float)[:, None]
     fraction = data["diffuse_fraction"].to_numpy(dtype=float)[:, None]

@@ -50,6 +50,20 @@ def test_precomputed_angles_match_computed(data):
     np.testing.assert_array_equal(with_angles.to_numpy(), without.to_numpy())
 
 
+def test_sub_hourly_input(data):
+    # Sub-hourly resolutions are supported as long as the input provides
+    # `diffuse_fraction` (the BRL model is hourly-only)
+    quarterhourly = synthetic.synthetic_weather(*COORDS, seed=99, freq="15min")
+    result = pv.run_model(quarterhourly, coords=COORDS, **CONFIG)
+    assert result.index.equals(quarterhourly.index)
+    assert np.isfinite(result).all()
+    assert (result >= 0).all() and result.max() > 0
+    # Output is mean power per timestep (W), so the annual mean must be
+    # resolution-independent (same seed produces the same daily clearness)
+    hourly = pv.run_model(data, coords=COORDS, **CONFIG)
+    assert result.mean() == pytest.approx(hourly.mean(), rel=0.05)
+
+
 def test_nan_input_gives_nan_output(data):
     modified = data.copy()
     modified.iloc[100:110, modified.columns.get_loc("global_horizontal")] = np.nan
@@ -145,6 +159,16 @@ def test_angles_index_mismatch_raises(data):
     angles = api.sun_angles_frame(data.index, COORDS)
     with pytest.raises(ValueError, match="index"):
         pv.run_model(data.iloc[:-1], coords=COORDS, angles=angles, **CONFIG)
+
+
+def test_missing_diffuse_fraction_raises(data):
+    with pytest.raises(ValueError, match="diffuse_fraction"):
+        pv.run_model(data.drop(columns=["diffuse_fraction"]), coords=COORDS, **CONFIG)
+
+
+def test_missing_global_horizontal_raises(data):
+    with pytest.raises(ValueError, match="global_horizontal"):
+        pv.run_model(data.drop(columns=["global_horizontal"]), coords=COORDS, **CONFIG)
 
 
 def test_invalid_system_loss_raises(data):

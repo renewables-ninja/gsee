@@ -240,6 +240,34 @@ def test_dtype_rejects_non_float(dataset):
         api.run_sites(dataset, dtype="int32", **CONFIGS["base"])
 
 
+def test_missing_required_variable_raises(dataset):
+    with pytest.raises(ValueError, match="diffuse_fraction"):
+        api.run_sites(dataset.drop_vars("diffuse_fraction"), **CONFIGS["base"])
+    with pytest.raises(ValueError, match="global_horizontal"):
+        api.run_sites(dataset.drop_vars("global_horizontal"), **CONFIGS["base"])
+
+
+def test_run_sites_sub_hourly():
+    # Sub-hourly resolutions are supported when the input provides
+    # `diffuse_fraction`; output stays mean power per timestep (W)
+    halfhourly = {
+        name: synthetic.synthetic_weather(*coords, seed=1, freq="30min")
+        for name, coords in list(SITES.items())[:2]
+    }
+    result = api.run_sites(_dataset(halfhourly), **CONFIGS["base"])
+    assert result["pv"].attrs["unit"] == "W"
+    assert np.isfinite(result["pv"].to_numpy()).all()
+    for i, (name, frame) in enumerate(halfhourly.items()):
+        expected = pv.run_model(frame, coords=SITES[name], **CONFIGS["base"])
+        np.testing.assert_allclose(
+            result["pv"].to_numpy()[:, i],
+            expected.to_numpy(),
+            rtol=1e-9,
+            atol=1e-6,
+            err_msg=name,
+        )
+
+
 def test_nan_steps_propagate(dataset):
     modified = dataset.copy(deep=True)
     modified["global_horizontal"].values[100:110, 1] = np.nan

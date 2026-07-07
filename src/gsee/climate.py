@@ -163,6 +163,14 @@ def detect_frequency(data, frequency="detect"):
             detected = {"Y": "A", "A": "A", "Q": "S", "M": "M", "D": "D", "H": "H"}.get(
                 inferred[0].upper()
             )
+    times = data["time"].to_index()
+    if len(times) > 1 and (times[1] - times[0]) < pd.Timedelta("1h"):
+        raise ValueError(
+            "The climate data interface supports hourly and coarser "
+            "resolutions only; run sub-hourly data that includes a "
+            "'diffuse_fraction' variable directly with "
+            "gsee.api.run_sites or gsee.pv.run_model"
+        )
     if frequency == "detect":
         if detected not in FREQUENCIES:
             raise ValueError(
