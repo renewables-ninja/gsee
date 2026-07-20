@@ -31,13 +31,13 @@ See [Development](development.md) for installing a development build.
 
 There are three entry points, from single sites to global grids:
 
-- **Single site**: [`gsee.pv.run_model()`](running/index.md) simulates one PV system from a pandas DataFrame of hourly irradiance data.
+- **Single site**: [`gsee.pv.run_model()`](running/index.md) simulates one PV system from a pandas DataFrame of hourly or finer irradiance data.
 - **Many sites or grids**: [`gsee.api.run_sites()` and `gsee.api.run_grid()`](running/multi-site.md) simulate many sites at once on a vectorized computation core, at roughly 20x lower per-site cost than the single-site path, with chunked and optionally parallel execution.
 - **Climate data**: [`gsee.climate.run_climate()`](climatedata-interface.md) runs the PV model directly on gridded climate data at annual, seasonal, monthly, daily or hourly resolution, synthesizing hourly irradiance where needed.
 
 Underneath sit the lower-level modules:
 
-- **`gsee.core`**: the vectorized multi-site computation core (solar position, plane-of-array irradiance, panel and inverter models, diffuse-fraction estimation, hourly synthesis) operating on `(time, site)` numpy arrays.
+- **`gsee.core`**: the vectorized multi-site computation core (solar position, plane-of-array irradiance, panel and inverter models, [diffuse-fraction estimation](diffuse-fraction.md), hourly synthesis) operating on `(time, site)` numpy arrays.
 - **`gsee.legacy`**: the frozen pre-0.4 single-site implementation (ephem-based solar positions and the original BRL diffuse-fraction model), kept only to replicate older simulation runs; requires the optional `legacy` extra (`pip install gsee[legacy]`), see [Legacy options](running/legacy.md).
 
 ## Examples

@@ -11,3 +11,4 @@ benchmarks/results/
 site/
 coverage.xml
 .coverage
+docs/figures/*.svg

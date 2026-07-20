@@ -85,6 +85,7 @@ h5netcdf = ">=1.3"
 mkdocs = ">=1.6"
 mkdocs-material = ">=9.5"
 ephem = ">=4.2.1"
+matplotlib = ">=3.9"
 
 # The minimal environment has no ephem, proving that gsee works without
 # the optional legacy dependency (gsee.legacy tests skip themselves)
@@ -103,5 +104,6 @@ benchmark = "python benchmarks/benchmark.py"
 format = "ruff format ."
 format-check = "ruff format --check ."
 lint = "ruff check ."
-docs-build = "mkdocs build --strict"
-docs-serve = "mkdocs serve"
+docs-figures = "python docs/figures/plot_model_comparison.py"
+docs-build = { cmd = "mkdocs build --strict", depends-on = ["docs-figures"] }
+docs-serve = { cmd = "mkdocs serve", depends-on = ["docs-figures"] }

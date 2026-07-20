@@ -26,6 +26,7 @@ nav:
         - PV models: running/pv-models.md
         - Multi-site simulations: running/multi-site.md
         - Legacy options: running/legacy.md
+    - Diffuse fraction: diffuse-fraction.md
     - Climate data interface: climatedata-interface.md
     - Development: development.md
 

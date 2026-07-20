@@ -1,13 +1,12 @@
 version: 2
 
+# Fully custom build via pixi, so RTD is equivalent to local development
 build:
   os: ubuntu-24.04
   tools:
     python: "3.12"
-
-mkdocs:
-  configuration: mkdocs.yml
-
-python:
-  install:
-    - requirements: requirements_docs.txt
+  commands:
+    - curl -fsSL https://pixi.sh/install.sh | bash
+    - $HOME/.pixi/bin/pixi run docs-build
+    - mkdir -p $READTHEDOCS_OUTPUT
+    - cp -r site $READTHEDOCS_OUTPUT/html
