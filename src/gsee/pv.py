@@ -32,10 +32,10 @@ from gsee import trigon, cec_tools
 R_TAMB = 20  # Reference ambient temperature (degC)
 R_TMOD = 25  # Reference module temperature (degC)
 R_IRRADIANCE = 1000  # Reference irradiance (W/m2)
-R_WINDSPEED = 5  # Reference wind speed (m/2)
+R_WINDSPEED = 5  # Reference wind speed (m/s)
 
 
-class PVPanel(object):
+class PVPanel:
     """
     PV panel model class
 
@@ -54,8 +54,6 @@ class PVPanel(object):
     """
 
     def __init__(self, panel_aperture=1.0, panel_ref_efficiency=1.0):
-        super().__init__()
-        # Panel characteristics
         self.panel_aperture = panel_aperture
         self.panel_ref_efficiency = panel_ref_efficiency
 
@@ -100,7 +98,7 @@ class SingleDiodePanel(PVPanel):
         If str: one of "open_rack_glass_glass", "close_mount_glass_glass",
         "open_rack_glass_polymer", "insulated_back_glass_polymer"
     ref_windspeed : float, default 5
-        Reference wind speed (m/2).
+        Reference wind speed (m/s).
 
     """
 
@@ -199,7 +197,7 @@ class HuldPanel(PVPanel):
                 + T_ * (self.k_3 + self.k_4 * np.log(G_) + self.k_5 * (np.log(G_)) ** 2)
                 + self.k_6 * (T_**2)
             )
-        eff.fillna(0, inplace=True)  # NaNs in case that G_ was <= 0
+        eff = eff.fillna(0)  # NaNs in case that G_ was <= 0
         eff[eff < 0] = 0  # Also make sure efficiency can't be negative
         return eff
 
@@ -251,7 +249,7 @@ _PANEL_TYPES = {
 }
 
 
-class Inverter(object):
+class Inverter:
     """
     PV inverter curve from {2}.
 
@@ -261,7 +259,6 @@ class Inverter(object):
     """
 
     def __init__(self, ac_capacity, eff_ref=0.9637, eff_nom=1.0):
-        super().__init__()
         self.ac_capacity = ac_capacity
         self.dc_capacity = ac_capacity / eff_nom
         self.efficiency_term = eff_nom / eff_ref
@@ -270,14 +267,13 @@ class Inverter(object):
         """
         Parameters
         ----------
-        df_in : float
+        dc_in : float
             DC electricity input in W
 
         Returns
         -------
-        ac_output : float
+        float
             AC electricity output in W
-
         """
         if dc_in == 0:
             return 0
@@ -317,7 +313,8 @@ def run_model(
     tilt : float
         Tilt angle (degrees).
     azim : float
-        Azimuth angle (degrees, 180 = towards equator).
+        Azimuth angle (degrees, 180 = South). The code automatically
+        corrects for the southern hemisphere so that panels face North.
     tracking : int
         Tracking (0: none, 1: 1-axis, 2: 2-axis).
     capacity : float
@@ -349,9 +346,6 @@ def run_model(
         Electric output from PV system in each hour (W).
 
     """
-
-    # FIXME: ensure that `data` and `angles` if given are both in the same time zone
-    # data = data.tz_localize("UTC")
 
     if (system_loss < 0) or (system_loss > 1):
         raise ValueError("system_loss must be >=0 and <=1")
@@ -451,6 +445,5 @@ def optimal_tilt(lat):
         return lat * 0.87
     elif lat <= 50:
         return (lat * 0.76) + 3.1
-    else:  # lat > 50
-        # raise NotImplementedError('Not implemented for latitudes beyond 50.')
-        return 40  # Simply use 40 degrees above lat 50
+    else:
+        return 40  # Use 40 degrees above lat 50
