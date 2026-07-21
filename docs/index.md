@@ -133,6 +133,7 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/d
       <td align="center" valign="top" width="14.28%"><a href="https://www.tsaoyu.com/"><img src="https://avatars.githubusercontent.com/u/6488896?v=4?s=100" width="100px;" alt="Tony Yu Cao"/><br /><sub><b>Tony Yu Cao</b></sub></a><br /><a href="https://github.com/renewables-ninja/gsee/issues?q=author%3Atsaoyu" title="Bug reports">🐛</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/jwohland"><img src="https://avatars.githubusercontent.com/u/20681098?v=4?s=100" width="100px;" alt="Jan Wohland"/><br /><sub><b>Jan Wohland</b></sub></a><br /><a href="https://github.com/renewables-ninja/gsee/issues?q=author%3Ajwohland" title="Bug reports">🐛</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/LinhHo"><img src="https://avatars.githubusercontent.com/u/45103089?v=4?s=100" width="100px;" alt="Linh Ho"/><br /><sub><b>Linh Ho</b></sub></a><br /><a href="https://github.com/renewables-ninja/gsee/commits?author=LinhHo" title="Code">💻</a> <a href="#ideas-LinhHo" title="Ideas, Planning, & Feedback">🤔</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/MaykThewessen"><img src="https://avatars.githubusercontent.com/u/18009395?v=4?s=100" width="100px;" alt="Mayk Thewessen"/><br /><sub><b>Mayk Thewessen</b></sub></a><br /><a href="https://github.com/renewables-ninja/gsee/commits?author=MaykThewessen" title="Code">💻</a></td>
     </tr>
   </tbody>
 </table>
