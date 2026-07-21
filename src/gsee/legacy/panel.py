@@ -23,9 +23,6 @@ Sources:
 import warnings
 
 import numpy as np
-import pvlib
-
-from gsee import cec_tools
 
 # Constants
 R_TAMB = 20  # Reference ambient temperature (degC)
