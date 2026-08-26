@@ -1,0 +1,49 @@
+gsee-climate-data
+=================
+
+This distribution bundles code and data that are covered by different terms.
+
+
+Code
+----
+
+The `gsee_climate_data` Python package is licensed under the BSD 3-Clause
+License. See LICENSE for the full text.
+
+
+Data
+----
+
+The bundled data file
+
+    src/gsee_climate_data/data/merra2_rad3x3_2011-2015_pdfs_land_prox.npz
+
+contains monthly probability density functions of daily mean global horizontal
+irradiance, derived from NASA's Modern-Era Retrospective analysis for Research
+and Applications, Version 2 (MERRA-2). MERRA-2 is produced by the NASA Global
+Modeling and Assimilation Office (GMAO) and distributed by the Goddard Earth
+Sciences Data and Information Services Center (GES DISC).
+
+MERRA-2 is released under NASA's Earth science data policy of full and open
+sharing: there are no restrictions on its use or redistribution, and as a work
+of the United States Government it is not subject to domestic copyright
+protection (17 U.S.C. 105). Citation of the source is requested rather than
+required. The BSD 3-Clause License above applies to the code in this package,
+not to the underlying reanalysis data.
+
+
+Citation
+--------
+
+When using this data, please cite MERRA-2:
+
+    Gelaro, R., McCarty, W., Suarez, M. J., et al. (2017). The Modern-Era
+    Retrospective Analysis for Research and Applications, Version 2 (MERRA-2).
+    Journal of Climate, 30(14), 5419-5454.
+    https://doi.org/10.1175/JCLI-D-16-0758.1
+
+and, for the derived PDFs and the GSEE model that consumes them:
+
+    Pfenninger, S., & Staffell, I. (2016). Long-term patterns of European PV
+    output using 30 years of validated hourly reanalysis and satellite data.
+    Energy, 114, 1251-1265. https://doi.org/10.1016/j.energy.2016.08.060

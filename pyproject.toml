@@ -25,15 +25,12 @@ extend-exclude = ["docs", "dist"]
 extend-select = ["I"]
 
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["gsee*"]
-
-[tool.setuptools]
-license-files = ["LICENSE"]
 
 [project]
 name = "gsee"
@@ -42,10 +39,10 @@ authors = [
 ]
 description="GSEE: Global Solar Energy Estimator"
 readme = "README.md"
-license = { text = "BSD-3-Clause" }
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
 classifiers = [
   "Intended Audience :: Science/Research",
-  "License :: OSI Approved :: BSD License",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
@@ -54,7 +51,7 @@ requires-python = ">=3.11"
 dynamic = ["version", "dependencies"]
 
 [project.optional-dependencies]
-climate = ["gsee-climate-data"]
+climate = ["gsee-climate-data>=1,<2"]
 legacy = ["ephem>=4.2.1"]
 
 [tool.setuptools.dynamic]

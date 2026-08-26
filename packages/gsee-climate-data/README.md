@@ -21,3 +21,22 @@ Arrays in the `.npz` file (see `gsee_climate_data.load()`):
 - `lat`, `lon`, `month` — coordinate vectors (`month` is 1..12)
 
 Cells without data (oceans) hold zeros/NaN probabilities and are treated as "no PDF available" by GSEE.
+
+## Citation
+
+When using this data, please cite MERRA-2:
+
+> Gelaro, R., McCarty, W., Suarez, M. J., et al. (2017). The Modern-Era Retrospective Analysis for Research and Applications, Version 2 (MERRA-2). _Journal of Climate_, 30(14), 5419-5454. <https://doi.org/10.1175/JCLI-D-16-0758.1>
+
+and, for the derived PDFs and the GSEE model that consumes them:
+
+> Pfenninger, S., & Staffell, I. (2016). Long-term patterns of European PV output using 30 years of validated hourly reanalysis and satellite data. _Energy_, 114, 1251-1265. <https://doi.org/10.1016/j.energy.2016.08.060>
+
+## License
+
+Code and data in this package are covered by different terms:
+
+- **Code** — the `gsee_climate_data` Python package is licensed under the BSD 3-Clause License (see `LICENSE`).
+- **Data** — the bundled `.npz` is derived from NASA MERRA-2, produced by the NASA Global Modeling and Assimilation Office and distributed by GES DISC.
+
+See `NOTICE` for the full statement.

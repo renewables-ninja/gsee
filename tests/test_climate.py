@@ -10,6 +10,8 @@ plausibility.
 
 """
 
+import pathlib
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -242,6 +244,32 @@ class TestBuiltinPdfs:
         np.testing.assert_array_equal(first["pv"].to_numpy(), second["pv"].to_numpy())
         assert np.isfinite(first["pv"].to_numpy()).all()
         assert (first["pv"].to_numpy() > 0).all()
+
+    def test_version_resolves_from_metadata(self):
+        # The companion package declares its version only in its pyproject.toml
+        # (which the release workflow checks against the git tag) and reads it
+        # back via importlib.metadata, so the two cannot drift. What can break
+        # is that lookup itself -- e.g. renaming the distribution, which would
+        # silently degrade __version__ to "unknown" -- so assert it resolves.
+        # (The equality check below cannot fail under pixi, which re-syncs the
+        # environment from pyproject.toml before running; it only bites on a
+        # stale non-pixi install.)
+        import tomllib
+
+        import gsee_climate_data
+
+        assert gsee_climate_data.__version__ != "unknown"
+
+        pyproject = (
+            pathlib.Path(__file__).parents[1]
+            / "packages"
+            / "gsee-climate-data"
+            / "pyproject.toml"
+        )
+        if not pyproject.exists():  # installed without the source tree alongside
+            pytest.skip("companion package source not available")
+        declared = tomllib.loads(pyproject.read_text())["project"]["version"]
+        assert gsee_climate_data.__version__ == declared
 
     def test_missing_data_package_raises(self, monkeypatch):
         import sys

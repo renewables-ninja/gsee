@@ -749,13 +749,13 @@ packages:
   - pandas>=3.0,<4
   - pvlib>=0.15
   - xarray>=2026.4,<2027
-  - gsee-climate-data ; extra == 'climate'
+  - gsee-climate-data>=1,<2 ; extra == 'climate'
   - ephem>=4.2.1 ; extra == 'legacy'
   requires_python: '>=3.11'
 - pypi: ./packages/gsee-climate-data
   name: gsee-climate-data
   requires_dist:
-  - numpy
+  - numpy>=1.22
   requires_python: '>=3.11'
 - pypi: https://files.pythonhosted.org/packages/00/bb/90ba423612b6aa0adccc6b1874bcd4a9b44b660c0c16f346611e00f64ac3/backrefs-7.0-py313-none-any.whl
   name: backrefs

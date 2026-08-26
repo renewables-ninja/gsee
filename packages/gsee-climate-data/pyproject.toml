@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -10,20 +10,26 @@ authors = [
 ]
 description = "MERRA-2-derived daily irradiance PDFs for the GSEE climate data interface"
 readme = "README.md"
-license = { text = "BSD-3-Clause" }
+license = "BSD-3-Clause"
+license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.11"
-dependencies = ["numpy"]
+dependencies = ["numpy>=1.22"]
 classifiers = [
+  "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Science/Research",
-  "License :: OSI Approved :: BSD License",
+  "Operating System :: OS Independent",
   "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Scientific/Engineering :: Atmospheric Science",
 ]
 
 [project.urls]
+homepage = "https://github.com/renewables-ninja/gsee"
 repository = "https://github.com/renewables-ninja/gsee"
-
-[tool.setuptools]
-license-files = ["LICENSE"]
+documentation = "https://gsee.readthedocs.io"
 
 [tool.setuptools.packages.find]
 where = ["src"]
