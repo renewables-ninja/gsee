@@ -1,6 +1,29 @@
 # Release History
 
-## 0.4.0 (dev)
+## 0.4.0 (2026-08-26)
+
+GSEE 0.4.0 is a rewrite of the internals around a vectorized computation core, keeping the existing API.
+Everything now computes on numpy arrays over `(time, site)`. The single-site `gsee.pv.run_model()` is a pandas wrapper around this code, and about 20 times faster than the 0.3.x code.
+
+The main new capability is running many sites at once.
+`gsee.api.run_sites()` takes an xarray Dataset over `(time, site)` and `gsee.api.run_grid()` one over `(time, lat, lon)`.
+They both accept per-site parameters and optionally can parallelise processes.
+Input is loaded one chunk at a time, so dask- or zarr-backed datasets stream from disk.
+The climate data interface has been rebuilt on the same core as `gsee.climate.run_climate()`, which runs the PV model on annual, seasonal, monthly, daily or hourly data, synthesizing hourly irradiance where the input is coarser.
+
+Existing code will run unchanged but will not reproduce v0.3 numbers: the inverter is now modelled by default; two long-standing units bugs in the BRL diffuse-fraction model are fixed, which lowers annual output by about 1.3% to 2.5% at fixed tilt; and solar positions come from the new SPA implementation, which is more accurate.
+Timesteps with NaN inputs now return NaN instead of 0.
+The [migration guide](https://gsee.readthedocs.io/en/latest/migrating/) covers this in detail and explains how to access old behaviour where possible.
+
+The pre-0.4 implementation is preserved in `gsee.legacy` for reproducing older simulation runs.
+It is the only part that still needs `ephem`, which is now an optional dependency (`pip install gsee[legacy]`).
+`gsee.trigon` and `gsee.brl_model` remain as deprecated aliases and will be removed in 0.5.0.
+
+Also new: PV models based on pvlib's single-diode implementation and the CEC module database, alongside a revised Huld parametrisation (`csi-new`).
+
+GSEE now requires Python 3.12+, pandas 3 and pvlib 0.15, and the built-in irradiance PDFs used by the climate interface have moved to a separate `gsee-climate-data` package (`pip install gsee[climate]`).
+
+### Detailed changes
 
 - Modified: minimum supported Python is now 3.12 (was 3.11), matching the versions the test suite actually runs on
 - Modified: relative efficiency is no longer capped by default. It exceeds 1.0 at cold module temperatures, which is physically expected and agreed on by all panel models; `temperature_correction_method="clip_high_efficiency"` is the opt-in cap, honoured by `pv.run_model`, `api.run_sites`/`run_grid` and `climate.run_climate`. The interim `clip_low_temperature` option has been removed.
