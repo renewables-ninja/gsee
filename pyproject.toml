@@ -1,12 +1,7 @@
 [tool.pytest.ini_options]
 minversion = "6.0"
-# opts:
-# `--dist=loadscope ` - run tests within classes in series
-# `--strict-markers` - Raise error on unexpected pytest markers being used (add new markers to `markers` config)
-# `-nauto` - parallelise over as many threads as possible (uses pytest-xdist). If debugging (`--pdb`), this will default to one thread.
-# `--cov-report=xml --cov-config=pyproject.toml` - coverage report config for when running in tests (uses pytest-cov; call `--cov` in CLI to switch coverage on; `--cov-config` include to avoid bug)
-# addopts = "-rav --dist=loadscope --strict-markers -nauto --cov-report=xml --cov-config=pyproject.toml"
-
+# Fail on undeclared pytest markers rather than silently skipping them
+addopts = "--strict-markers"
 testpaths = ["tests"]
 markers = [
   "reference: reference regression tests (deselect with -m 'not reference')",
@@ -17,7 +12,7 @@ source = ["gsee"]
 
 [tool.ruff]
 line-length = 88
-target-version = "py311"
+target-version = "py312"
 extend-exclude = ["docs", "dist"]
 
 [tool.ruff.lint]
@@ -42,12 +37,17 @@ readme = "README.md"
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
 classifiers = [
+  "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Science/Research",
+  "Operating System :: OS Independent",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering",
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dynamic = ["version", "dependencies"]
 
 [project.optional-dependencies]
@@ -60,7 +60,7 @@ version = { attr = "gsee._version.__version__" }
 
 [project.urls]
 repository = "https://github.com/renewables-ninja/gsee"
-changelog = "https://github.com/renewables-ninja/gsee/blob/master/CHANGELOG.md"
+changelog = "https://github.com/renewables-ninja/gsee/blob/main/CHANGELOG.md"
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]

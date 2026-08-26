@@ -2,7 +2,7 @@
 Plane-of-array irradiance, vectorized over (time, site)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The same formulas as `gsee.trigon.aperture_irradiance` (DNI from
+The same formulas as `gsee.legacy.trigon.aperture_irradiance` (DNI from
 horizontal direct irradiance and risen fraction, incidence geometry
 for fixed and 1-/2-axis tracking, isotropic diffuse transposition with
 ground reflection), as pure numpy over `(T, S)` arrays with per-site
@@ -88,7 +88,7 @@ def aperture_irradiance(
     tilt, azimuth : scalar or (S,) arrays
         Panel (or tracking-axis) tilt and azimuth in RADIANS; azimuth 0
         points towards the pole, pi towards the equator (as in
-        `trigon.aperture_irradiance`).
+        `gsee.legacy.trigon.aperture_irradiance`).
     tracking : int
         0 (fixed), 1 (1-axis) or 2 (2-axis).
     albedo : scalar or (S,) array
@@ -121,7 +121,6 @@ def aperture_irradiance(
             incidence = _incidence_single_tracking(sun_alt, tilt, azimuth, sun_azimuth)
             panel_tilt = _tilt_single_tracking(sun_alt, tilt, azimuth, sun_azimuth)
         elif tracking == 2:
-            # 2-axis tracking means incidence angle is zero
             incidence = 0.0
             panel_tilt = sun_zenith
         else:

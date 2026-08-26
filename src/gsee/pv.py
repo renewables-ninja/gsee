@@ -33,7 +33,7 @@ from gsee.core.panel import _check_temperature_correction_method
 R_TAMB = 20  # Reference ambient temperature (degC)
 R_TMOD = 25  # Reference module temperature (degC)
 R_IRRADIANCE = 1000  # Reference irradiance (W/m2)
-R_WINDSPEED = 5  # Reference wind speed (m/2)
+R_WINDSPEED = 5  # Reference wind speed (m/s)
 
 
 class PVPanel(object):
@@ -42,7 +42,7 @@ class PVPanel(object):
 
     Unit for power is W, for energy, Wh.
 
-    By default, self.module_aperture is set to 1.0, so the output will
+    By default, panel_aperture is 1.0, so the output will
     correspond to output per m2 of solar field given the other
     input values.
 
@@ -50,7 +50,7 @@ class PVPanel(object):
     ----------
     panel_aperture : float
         Panel aperture area (m2)
-    ref_efficiency : float
+    panel_ref_efficiency : float
         Reference conversion efficiency
     """
 
@@ -101,7 +101,7 @@ class SingleDiodePanel(PVPanel):
         If str: one of "open_rack_glass_glass", "close_mount_glass_glass",
         "open_rack_glass_polymer", "insulated_back_glass_polymer"
     ref_windspeed : float, default 5
-        Reference wind speed (m/2).
+        Reference wind speed (m/s).
 
     """
 
@@ -198,7 +198,7 @@ class HuldPanel(PVPanel):
         Parameters
         ----------
         irradiance : pandas Series
-            Irradiance in W
+            Irradiance in W/m2
         tamb : pandas Series
             Ambient temperature in deg C
 
@@ -220,7 +220,7 @@ class HuldPanel(PVPanel):
                 + self.k_6 * (T_**2)
             )
         eff = eff.fillna(0)  # NaNs in case that G_ was <= 0
-        eff[eff < 0] = 0  # Also make sure efficiency can't be negative
+        eff[eff < 0] = 0
 
         if temperature_correction_method == "clip_high_efficiency":
             eff = eff.clip(upper=1.0)
@@ -329,6 +329,10 @@ _PANEL_TYPES = {
     "cec-csi-median": SingleDiodePanelCecCsiMedian,
 }
 
+# Technologies the frozen pre-0.4 implementation knows about; mirrors
+# `_PANEL_TYPES` in gsee/legacy/panel.py, which never changes.
+_LEGACY_TECHNOLOGIES = frozenset({"csi", "cis", "cdte"})
+
 
 class Inverter(object):
     """
@@ -349,7 +353,7 @@ class Inverter(object):
         """
         Parameters
         ----------
-        df_in : float
+        dc_in : float
             DC electricity input in W
 
         Returns
@@ -377,6 +381,7 @@ def run_model(
     use_inverter=True,
     technology="csi",
     system_loss=0.10,
+    albedo=0.3,
     angles=None,
     include_raw_data=False,
     legacy_solarposition=False,
@@ -395,8 +400,9 @@ def run_model(
         and 'diffuse_fraction', and may contain a 'temperature' column
         for ambient air temperature (in deg C). The index must be a
         uniformly spaced DatetimeIndex in UTC; any uniform resolution,
-        hourly or finer, is supported. Timesteps with NaN
-        inputs return NaN (before v0.4 they silently returned 0).
+        hourly or finer, is supported. At least two timesteps are
+        required, since the solar position code derives the timestep
+        length from the index. Timesteps with NaN inputs return NaN.
     coords : (float, float) tuple
         Latitude and longitude.
     tilt : float
@@ -417,6 +423,9 @@ def run_model(
         'cec-csi-median', or 'singlediode' (requires `module_params`).
     system_loss : float, default 0.10
         Additional system losses not caused by panel and inverter (fraction).
+    albedo : float, default 0.3
+        Ground reflectance used for the reflected component of the
+        plane-of-array irradiance. Not available on the legacy path.
     angles : pandas DataFrame, default None
         Precomputed solar angles in the format returned by
         `gsee.api.sun_angles_frame` (degree columns
@@ -454,6 +463,30 @@ def run_model(
             DeprecationWarning,
             stacklevel=2,
         )
+        # gsee.legacy is frozen at its pre-0.4 behaviour, so it cannot honour
+        # options introduced in 0.4. Reject those explicitly instead of letting
+        # them fail deep inside the frozen code with an opaque TypeError/KeyError.
+        if "temperature_correction_method" in kwargs:
+            raise ValueError(
+                "temperature_correction_method is not available on the legacy "
+                "path (legacy_solarposition=True): the frozen pre-0.4 panels "
+                "never cap relative efficiency"
+            )
+        if technology not in _LEGACY_TECHNOLOGIES:
+            raise ValueError(
+                "technology={!r} is not available on the legacy path "
+                "(legacy_solarposition=True); the frozen pre-0.4 "
+                "implementation supports {}".format(
+                    technology, sorted(_LEGACY_TECHNOLOGIES)
+                )
+            )
+        if albedo != 0.3:
+            raise ValueError(
+                "albedo is not configurable on the legacy path "
+                "(legacy_solarposition=True); the frozen pre-0.4 "
+                "implementation always uses 0.3"
+            )
+
         from gsee import legacy  # deferred: needs the optional ephem dependency
 
         return legacy.run_model(
@@ -519,7 +552,7 @@ def run_model(
             "azimuth": np.array([math.radians(azim)]),
             "capacity": np.array([float(capacity)]),
             "inverter_capacity": np.array([float(inverter_capacity)]),
-            "albedo": np.array([0.3]),
+            "albedo": np.array([float(albedo)]),
             "tracking": tracking,
             "technology": technology,
             "module_params": module_params,
@@ -549,7 +582,7 @@ def run_model(
 def _angles_arrays(angles):
     """
     Convert a solar angles DataFrame (`gsee.api.sun_angles_frame` /
-    `trigon.sun_angles` format) to the dict of (T, 1) arrays the core
+    `gsee.legacy.trigon.sun_angles` format) to the dict of (T, 1) arrays the core
     consumes.
 
     """
@@ -597,5 +630,4 @@ def optimal_tilt(lat):
     elif lat <= 50:
         return (lat * 0.76) + 3.1
     else:  # lat > 50
-        # raise NotImplementedError('Not implemented for latitudes beyond 50.')
         return 40  # Simply use 40 degrees above lat 50

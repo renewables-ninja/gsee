@@ -197,3 +197,157 @@ def test_routes_to_legacy_implementation(data, monkeypatch, kwargs):
     with pytest.warns(DeprecationWarning, match="gsee.legacy.run_model"):
         pv.run_model(data, coords=COORDS, **CONFIG, **kwargs)
     assert called
+
+
+def test_huld_coefficients_match_the_core():
+    # `gsee.pv`'s panel classes are no longer on the compute path -- run_model
+    # goes through gsee.core -- but they remain public API until 0.5.0. Guard
+    # the two copies of the Huld coefficients against drifting apart.
+    from gsee.core.panel import HULD_COEFFICIENTS
+
+    for technology, coefficients in HULD_COEFFICIENTS.items():
+        panel = pv._PANEL_TYPES[technology]()
+        assert (
+            panel.k_1,
+            panel.k_2,
+            panel.k_3,
+            panel.k_4,
+            panel.k_5,
+            panel.k_6,
+        ) == coefficients, "coefficients for {} have drifted".format(technology)
+
+
+def test_legacy_technologies_match_the_frozen_implementation():
+    # pv.run_model validates `technology` against this set before delegating
+    # to the frozen legacy code, so it must mirror what legacy actually has.
+    pytest.importorskip("ephem")
+    from gsee.legacy.panel import _PANEL_TYPES as legacy_types
+
+    assert pv._LEGACY_TECHNOLOGIES == frozenset(legacy_types)
+
+
+def test_albedo_is_configurable(data):
+    # Ground reflectance must move output monotonically
+    low = pv.run_model(data, (47.36, 8.55), 30, 180, 0, 1000.0, albedo=0.0)
+    default = pv.run_model(data, (47.36, 8.55), 30, 180, 0, 1000.0)
+    high = pv.run_model(data, (47.36, 8.55), 30, 180, 0, 1000.0, albedo=0.8)
+    assert (low <= default + 1e-9).all()
+    assert (high >= default - 1e-9).all()
+    assert high.sum() > low.sum()
+
+
+class TestLegacyPathGuards:
+    """
+    gsee.legacy is frozen at pre-0.4 behaviour, so options added in 0.4 must
+    be rejected with a clear message rather than failing inside frozen code.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _ignore_deprecation(self):
+        pytest.importorskip("ephem")
+
+    def test_temperature_correction_method_rejected(self, data):
+        with pytest.warns(DeprecationWarning):
+            with pytest.raises(ValueError, match="temperature_correction_method"):
+                pv.run_model(
+                    data,
+                    (47.36, 8.55),
+                    30,
+                    180,
+                    0,
+                    1000.0,
+                    legacy_solarposition=True,
+                    temperature_correction_method="clip_high_efficiency",
+                )
+
+    def test_unsupported_technology_rejected(self, data):
+        with pytest.warns(DeprecationWarning):
+            with pytest.raises(ValueError, match="csi-new"):
+                pv.run_model(
+                    data,
+                    (47.36, 8.55),
+                    30,
+                    180,
+                    0,
+                    1000.0,
+                    legacy_solarposition=True,
+                    technology="csi-new",
+                )
+
+    def test_albedo_rejected(self, data):
+        with pytest.warns(DeprecationWarning):
+            with pytest.raises(ValueError, match="albedo"):
+                pv.run_model(
+                    data,
+                    (47.36, 8.55),
+                    30,
+                    180,
+                    0,
+                    1000.0,
+                    legacy_solarposition=True,
+                    albedo=0.5,
+                )
+
+    def test_supported_technology_still_runs(self, data):
+        with pytest.warns(DeprecationWarning):
+            result = pv.run_model(
+                data,
+                (47.36, 8.55),
+                30,
+                180,
+                0,
+                1000.0,
+                legacy_solarposition=True,
+                technology="cdte",
+            )
+        assert len(result) == len(data)
+
+
+class TestCecToolsRelativeEff:
+    """
+    `cec_tools.relative_eff` documents "float or pandas.Series" but only ever
+    worked for Series -- scalars hit `.fillna` on a numpy float.
+    """
+
+    @pytest.fixture
+    def params(self):
+        return pv.CEC_PARAMETERS["Mono-c-Si-Median"]
+
+    def test_python_float(self, params):
+        from gsee import cec_tools
+
+        assert cec_tools.relative_eff(0.0, 25.0, params) == 0.0
+        value = cec_tools.relative_eff(500.0, 25.0, params)
+        assert isinstance(value, float)
+        assert 0.9 < value < 1.1
+
+    def test_numpy_scalar(self, params):
+        from gsee import cec_tools
+
+        # np.float64 is a float subclass, so the `== 0` shortcut must not
+        # swallow numpy scalars and return a bare int
+        assert cec_tools.relative_eff(np.float64(0.0), np.float64(25.0), params) == 0.0
+        value = cec_tools.relative_eff(np.float64(500.0), np.float64(25.0), params)
+        assert 0.9 < float(value) < 1.1
+
+    def test_series_keeps_index(self, params):
+        from gsee import cec_tools
+
+        index = pd.date_range("2019-06-01", periods=3, freq="1h", tz="UTC")
+        irradiance = pd.Series([0.0, 500.0, 1000.0], index=index)
+        result = cec_tools.relative_eff(
+            irradiance, pd.Series([25.0] * 3, index=index), params
+        )
+        assert isinstance(result, pd.Series)
+        assert result.index.equals(index)
+        assert result.iloc[0] == 0.0
+        assert np.isfinite(result.to_numpy()).all()
+
+    def test_matches_scalar_and_series(self, params):
+        from gsee import cec_tools
+
+        scalar = cec_tools.relative_eff(500.0, 25.0, params)
+        series = cec_tools.relative_eff(
+            pd.Series([500.0]), pd.Series([25.0]), params
+        ).iloc[0]
+        assert scalar == pytest.approx(series)

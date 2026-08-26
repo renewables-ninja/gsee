@@ -33,7 +33,9 @@ dataset = xr.Dataset(
 )
 ```
 
-`run_grid` expects the same variables over `(time, lat, lon)` instead.
+`run_grid` expects the same variables over `(time, lat, lon)` instead. The two grid
+dimensions may equally be named `latitude`/`longitude`, as in CF-conventional climate
+data; the result keeps whichever names the input used.
 
 ## Running
 

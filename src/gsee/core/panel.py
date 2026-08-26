@@ -18,7 +18,8 @@ R_TMOD = 25.0  # Reference module temperature (degC)
 R_IRRADIANCE = 1000.0  # Reference irradiance (W/m2)
 R_WINDSPEED = 5.0  # Reference wind speed (m/s)
 
-#: Huld model coefficients (k_1..k_6) per technology, as in gsee.pv
+#: Huld model coefficients (k_1..k_6) per technology; duplicated by the
+#: panel classes in gsee.pv, with the two pinned equal by a test
 HULD_COEFFICIENTS = {
     "csi": (-0.017162, -0.040289, -0.004681, 0.000148, 0.000169, 0.000005),
     "csi-new": (-0.006756, -0.016444, -0.003015, -0.000045, -0.000043, 0.000005),
@@ -92,7 +93,7 @@ def _resolve_temperature_params(temperature_params):
 def singlediode_module_temperature(
     irradiance, tamb, windspeed=R_WINDSPEED, temperature_params="open_rack_glass_glass"
 ):
-    """SAPM cell temperature (degC), as in `gsee.pv.SingleDiodePanel`."""
+    """SAPM cell temperature (degC)."""
     params = _resolve_temperature_params(temperature_params)
     return pvlib.temperature.sapm_cell(
         irradiance, tamb, windspeed, params["a"], params["b"], params["deltaT"]
@@ -144,10 +145,10 @@ def panel_power(
 ):
     """
     DC power output (W) for in-plane irradiance and ambient
-    temperature, replicating `gsee.pv.run_model`'s panel setup: panel
-    aperture sized from `capacity` with 0.1 reference efficiency, so
-    power = irradiance/1000 * capacity * relative_efficiency. NOT
-    clipped to capacity (the caller does that, as in `run_model`).
+    temperature. The panel aperture is sized from `capacity` with a 0.1
+    reference efficiency, so power = irradiance/1000 * capacity *
+    relative_efficiency. NOT clipped to capacity; the caller
+    (`gsee.api._compute_chunk`) does that.
 
     `capacity` may be scalar or (S,); `technology` selects the Huld
     coefficient set or the single-diode model ('singlediode' /

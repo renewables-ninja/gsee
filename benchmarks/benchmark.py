@@ -7,6 +7,11 @@ Times the individual pipeline stages and end-to-end runs on one
 site-year of deterministic synthetic data. Also runs a multi-site loop to
 track how per-site cost scales.
 
+The frozen `gsee.legacy` stages and the off-path panel/inverter classes in
+`gsee.pv` are timed as a baseline for the vectorized core, not because they
+are on the 0.4 compute path. Requires the optional `legacy` extra
+(`pip install gsee[legacy]`), which the module imports unconditionally.
+
 Results are printed as a table and saved as JSON under
 benchmarks/results/.
 

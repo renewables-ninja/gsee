@@ -47,6 +47,8 @@ Underneath sit the lower-level modules:
 `data` must be a pandas.DataFrame with columns `global_horizontal` (in W/m2), `diffuse_fraction`, and optionally a `temperature` column for ambient air temperature (in degrees Celsius), indexed with a timezone-aware UTC DatetimeIndex.
 
 ```python
+import gsee.pv
+
 result = gsee.pv.run_model(
     data,
     coords=(22.78, 5.51),  # Latitude and longitude
@@ -60,6 +62,8 @@ result = gsee.pv.run_model(
 ### Power output from many sites at once
 
 ```python
+import gsee.api
+
 result = gsee.api.run_sites(
     dataset,  # xarray.Dataset over (time, site), see the multi-site documentation
     tilt=30,
@@ -76,6 +80,8 @@ See [Multi-site simulations](running/multi-site.md) for the input format and the
 `include_raw_data=True` returns a DataFrame that includes the in-plane direct and diffuse irradiance, module temperature and relative efficiency alongside the power output:
 
 ```python
+import gsee.pv
+
 result = gsee.pv.run_model(
     data,
     coords=(22.78, 5.51),
@@ -91,6 +97,8 @@ plane_irradiance = result[["direct", "diffuse"]]
 ### PV output from gridded monthly climate data
 
 ```python
+import gsee.climate
+
 result = gsee.climate.run_climate(
     dataset,  # xarray.Dataset over (time, lat, lon) with monthly mean irradiance
     tilt=35,

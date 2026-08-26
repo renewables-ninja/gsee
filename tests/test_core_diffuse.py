@@ -123,7 +123,7 @@ def test_corrected_predictors_raise_diffuse_fraction(clearness_index):
     )
     shift = np.nanmean(corrected - legacy)
     # The corrected predictor units raise the mean diffuse fraction by
-    # ~+0.06 (see gsee.core.diffuse docstring)
+    # roughly 0.06 (see the gsee.core.diffuse module docstring)
     assert 0.03 < shift < 0.10
 
 

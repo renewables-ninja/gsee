@@ -12,6 +12,9 @@ The motivation behind this module is to simplify the use of GSEE with large sets
 - **`temperature`** (optional): ambient temperature in degrees Celsius. 20 °C is assumed if absent.
 - **`diffuse_fraction`** (optional, hourly data only): with lower-than-hourly resolution the diffuse fraction is always estimated with the [BRL model](diffuse-fraction.md).
 
+!!! note "Hourly input without a diffuse fraction"
+    When hourly input has no `diffuse_fraction` variable, it is estimated with the BRL model, which requires the time index to cover whole days starting at midnight UTC. Trim partial days from the input, or supply `diffuse_fraction` yourself.
+
 Open NetCDF files with `xarray` and rename variables as needed:
 
 ```python
@@ -45,6 +48,7 @@ result["pv"]  # Over the input time dimension(s)
 - **`frequency`**: temporal resolution of the input data. In addition to the default, `'detect'`, accepts `'A'`, `'S'`, `'M'`, `'D'`, `'H'`, which stand for _annual, seasonal, monthly, daily, hourly_ data.
 - **`tilt`** can be given as a latitude-dependent function instead of a static value, e.g. `tilt=lambda lat: 0.35396 * lat + 16.84775` or `tilt=gsee.pv.optimal_tilt`.
 - **`seed`**: makes the PDF-based day sampling reproducible.
+- **`legacy_brl_predictors`**: set to `True` to reproduce the v0.3 diffuse fractions, see below.
 - Options of [`run_sites`](running/multi-site.md) such as `workers`, `dtype`, `technology` or `system_loss` can be passed through directly.
 
 Output units follow v0.3 conventions: `pv` is in Wh (per hour) for hourly input, and Wh/day for all coarser input resolutions.
@@ -86,3 +90,13 @@ The v0.3 script for generating PDFs from a reanalysis dataset can be found on th
 ## Diffuse irradiance fraction
 
 For all synthesized hourly data, the diffuse fraction is estimated with the [BRL model](diffuse-fraction.md).
+The same applies to hourly input data that has no `diffuse_fraction` variable.
+
+v0.4 fixed two units bugs in the BRL model, which raises the mean estimated diffuse fraction by about +0.06 relative to v0.3 and changes annual PV output by roughly -1.3% to -2.5% for fixed tilt (see [Migrating](migrating.md#brl-diffuse-fraction-units-fix)).
+To reproduce the v0.3 behaviour, pass `legacy_brl_predictors=True`:
+
+```python
+result = gsee.climate.run_climate(data, ..., legacy_brl_predictors=True)
+```
+
+This restores the old, incorrect predictor units and is only useful for backwards compatibility with older simulation runs.

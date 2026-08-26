@@ -399,9 +399,9 @@ def sun_angles(
 
     # 5. Final risen fraction: where no sunlit interval touches a step
     # (polar day/night have no sunrise/sunset events), fall back to the
-    # sun's position at the step midpoint; and as in the reference
-    # implementation, a sun whose centre stays just below the horizon
-    # counts as not risen
+    # sun's position at the step midpoint; and as in the frozen
+    # gsee.legacy.trigon implementation, a sun whose centre stays just
+    # below the horizon counts as not risen
     risen_fraction = np.where(
         overlap > 0.0, risen_events, (elevation > 0.0).astype(float)
     )

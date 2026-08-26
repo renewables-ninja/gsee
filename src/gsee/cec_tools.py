@@ -1,3 +1,4 @@
+import numpy as np
 import pvlib
 
 
@@ -14,11 +15,6 @@ def get_efficiency(irradiance, cell_temperature, module_params):
     params = pvlib.pvsystem.calcparams_desoto(
         effective_irradiance=irradiance, temp_cell=cell_temperature, **module_params
     )
-
-    # Ensure that the shunt resistance is not infinite
-    # Commented out because we want to still return valid Series when
-    # some of the values are zero -- NaNs from 0-divisions are filled later
-    # assert params[3] != math.inf
 
     dc = pvlib.pvsystem.singlediode(*params)
     efficiency = dc["p_mp"] / irradiance
@@ -49,11 +45,17 @@ def relative_eff(irradiance, cell_temperature, params):
         Module params 'alpha_sc', 'a_ref', 'I_L_ref', 'I_o_ref', 'R_sh_ref', 'R_s'.
 
     """
-    if isinstance(irradiance, float) and irradiance == 0:
-        return 0
+    scalar_input = np.ndim(irradiance) == 0
+    if scalar_input and float(irradiance) == 0:
+        return 0.0
 
     power_stc = 1000 * get_efficiency(1000, 25, params)
     power = irradiance * get_efficiency(irradiance, cell_temperature, params)
 
-    # Fill NaNs from any possible divisions by zero with 0
-    return (power / (power_stc * (irradiance / 1000))).fillna(0)
+    # Zero irradiance divides by zero; fill the resulting NaN/inf with 0
+    with np.errstate(divide="ignore", invalid="ignore"):
+        result = np.divide(power, power_stc * (irradiance / 1000))
+    if hasattr(result, "fillna"):  # pandas Series, keeps its index
+        return result.fillna(0)
+    result = np.nan_to_num(result, nan=0.0, posinf=0.0, neginf=0.0)
+    return float(result) if scalar_input else result

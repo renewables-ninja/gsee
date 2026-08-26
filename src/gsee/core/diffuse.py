@@ -3,9 +3,18 @@ BRL diffuse-fraction model, vectorized over (time, site)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The Ridley et al. (2010) BRL model with Lauret et al. (2013)
-parameters, ephem-free and as pure numpy over `(time, site)` arrays:
-solar time and altitude come from the vectorized SPA core instead of
-per-hour ephem calls.
+parameters, as pure numpy over `(time, site)` arrays, with solar time
+and altitude taken from the vectorized SPA core.
+
+Two of the model's predictors were historically fed in the wrong
+units: apparent solar time in radians rather than hours (`ephem.hours`
+floats are radians), and solar altitude in radians rather than
+degrees, evaluated once at midnight and held constant for the whole
+day rather than per hour. Both are corrected here. Correcting them
+raises the mean estimated diffuse fraction by roughly 0.06, which
+lowers annual PV output by about 1.3% to 2.5% for a fixed tilt;
+`legacy_predictors=True` reinstates the old behaviour for reproducing
+pre-0.4 runs.
 
 """
 
@@ -29,7 +38,7 @@ _SECONDS_PER_DAY = 86400.0
 def _persistence(clearness_days, rise_hour, set_hour):
     """
     The BRL persistence term psi for `clearness_days` shaped
-    (D, 24, S), replicating `brl_model._get_psi_func` branch by
+    (D, 24, S), replicating `gsee.legacy.brl_model._get_psi_func` branch by
     branch. `rise_hour`/`set_hour` are (D, S) integer hours.
 
     """

@@ -1,12 +1,15 @@
 """
-Tests of the frozen pre-0.4 implementation in `gsee.legacy.trigon`
-(formerly `gsee.trigon`). Skipped entirely when the optional ephem
+Tests of the frozen pre-0.4 implementation in `gsee.legacy` (solar
+geometry, panel models) and of the deprecated `gsee.trigon` /
+`gsee.brl_model` aliases. Skipped entirely when the optional ephem
 dependency is not installed.
 
 """
 
+import importlib
 import math
 import os
+import sys
 
 import pandas as pd
 import pytest
@@ -272,3 +275,38 @@ def test_legacy_huld_efficiency_uncapped():
         pd.Series([1000.0]), pd.Series([-15.0])
     )
     assert eff.iloc[0] == pytest.approx(1.02353)
+
+
+class TestDeprecatedAliases:
+    """
+    `gsee.trigon` and `gsee.brl_model` are aliases of their `gsee.legacy`
+    counterparts, to be removed in 0.5.0. They warn at import time, so the
+    module has to be purged from sys.modules to observe it more than once
+    per process.
+    """
+
+    @pytest.mark.parametrize(
+        "module,moved_to",
+        [
+            ("gsee.trigon", "gsee.legacy.trigon"),
+            ("gsee.brl_model", "gsee.legacy.brl_model"),
+        ],
+    )
+    def test_alias_warns_and_reexports(self, module, moved_to):
+        for name in (module, moved_to):
+            sys.modules.pop(name, None)
+        with pytest.warns(DeprecationWarning, match=r"0\.5\.0"):
+            alias = importlib.import_module(module)
+        target = importlib.import_module(moved_to)
+        # Everything the alias advertises must actually come from the target
+        assert alias.__all__
+        for name in alias.__all__:
+            assert getattr(alias, name) is getattr(target, name)
+
+    def test_alias_warning_names_the_new_location(self):
+        sys.modules.pop("gsee.trigon", None)
+        with pytest.warns(DeprecationWarning) as record:
+            importlib.import_module("gsee.trigon")
+        message = str(record[0].message)
+        assert "gsee.legacy.trigon" in message
+        assert "gsee[legacy]" in message

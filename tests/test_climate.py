@@ -21,6 +21,11 @@ from gsee import climate
 from gsee.core import synthesis
 
 SITES = {"zurich": (47.36, 8.55), "cape_town": (-33.9, 18.4)}
+# Sites that exercise the two diurnal_profile branches the fixtures above
+# never reach: a sunlit window wrapping past midnight UTC, and the polar
+# fallback where the sun neither rises nor sets.
+PACIFIC_SITE = (-45.9, 170.5)  # Dunedin, NZ -- solar noon near 00:38 UTC
+POLAR_SITE = (78.25, 15.5)  # Svalbard -- midnight sun / polar night
 PARAMS = {"tilt": 30, "azim": 180, "tracking": 0, "capacity": 1000.0}
 
 LATS = np.array([lat for lat, _ in SITES.values()])
@@ -100,7 +105,7 @@ class TestSynthesis:
         values = synthesis.sample_from_pdfs(xk, pk, 10000, np.random.default_rng(1))
         assert values.shape == (10000, 2)
         assert set(np.unique(values[:, 0])) <= {1.0, 2.0, 3.0}
-        # Zero-probability site draws zeros, as in v0.3
+        # Zero-probability site draws zeros
         assert (values[:, 1] == 0).all()
         assert abs((values[:, 0] == 2.0).mean() - 0.5) < 0.02
 
@@ -292,6 +297,200 @@ class TestBuiltinPdfs:
         )
 
 
+class TestGlobalCoverage:
+    """
+    Coverage for the `core.synthesis.diurnal_profile` branches that only
+    trigger far from Greenwich or inside the polar circles -- i.e. most of
+    the Americas and Asia, and every high-latitude cell of a global grid.
+    """
+
+    def test_diurnal_profile_wraps_past_midnight_utc(self):
+        lat, lon = np.array([PACIFIC_SITE[0]]), np.array([PACIFIC_SITE[1]])
+        days = pd.date_range("2019-06-01", periods=1, freq="D").values
+        _, hourly = synthesis.diurnal_profile(np.array([[200.0]]), days, lat, lon)
+        profile = hourly[:, 0]
+        sunlit = np.flatnonzero(profile > 0)
+        # The window straddles midnight UTC: lit at both ends of the day...
+        assert sunlit.min() == 0
+        assert sunlit.max() == 23
+        # ...and dark through the middle, which is local night in New Zealand
+        assert not profile[8:16].any()
+        # Peak at solar noon, which at 170.5 deg east falls just after 00:00 UTC
+        assert int(np.argmax(profile)) == 0
+        # Southern-hemisphere midwinter at 45.9 deg S: a short day
+        assert 8 <= len(sunlit) <= 10
+        np.testing.assert_allclose(profile.mean(), 200.0, rtol=1e-12)
+
+    def test_diurnal_profile_polar_fallback(self):
+        lat, lon = np.array([POLAR_SITE[0]]), np.array([POLAR_SITE[1]])
+        summer_day = pd.date_range("2019-06-21", periods=1, freq="D").values
+        winter_day = pd.date_range("2019-12-21", periods=1, freq="D").values
+        _, summer = synthesis.diurnal_profile(np.array([[200.0]]), summer_day, lat, lon)
+        _, winter = synthesis.diurnal_profile(np.array([[200.0]]), winter_day, lat, lon)
+        for profile in (summer[:, 0], winter[:, 0]):
+            # No sunrise/sunset to anchor to, so the mean is spread over the
+            # whole day; the normalisation still preserves it exactly
+            assert (profile > 0).sum() == 24
+            np.testing.assert_allclose(profile.mean(), 200.0, rtol=1e-12)
+        # KNOWN LIMITATION (core/synthesis.py, the NaN rise/set fallback):
+        # midnight sun and polar night are indistinguishable to the fallback,
+        # since both return NaN, so a December day at Svalbard is spread as if
+        # the sun were up even though it stays ~12 deg below the horizon. Real
+        # polar-night irradiance is ~0, so this is harmless for real data, but
+        # a non-zero input is not zeroed out. Pinned here so any future change
+        # to that behaviour is a deliberate one.
+        np.testing.assert_array_equal(summer[:, 0], winter[:, 0])
+
+    def test_diurnal_profile_zero_at_night_across_longitudes(self):
+        # Sweep the globe: wherever the profile is non-zero the sun must be up
+        lons = np.arange(-180.0, 180.0, 30.0)
+        lats = np.full_like(lons, 40.0)
+        days = pd.date_range("2019-03-21", periods=1, freq="D").values
+        times, hourly = synthesis.diurnal_profile(
+            np.full((1, len(lons)), 200.0), days, lats, lons
+        )
+        from gsee.core import solarposition
+
+        elevation = solarposition.solar_position(
+            np.asarray(times, dtype="datetime64[ns]"), lats, lons
+        )["apparent_elevation"]
+        lit = hourly > 0
+        # Allow the hour containing sunrise/sunset to straddle the horizon
+        assert (elevation[lit] > -15.0).all()
+        np.testing.assert_allclose(hourly.mean(axis=0), 200.0, rtol=1e-12)
+
+
+class TestPinnedMagnitudes:
+    """
+    Absolute checks. The rest of the climate suite is self-consistent
+    (monthly vs daily, grid vs stacked), which cannot catch a systematically
+    wrong diurnal profile or clearness index -- these can.
+    """
+
+    def test_hourly_clearness_index_matches_pvlib(self):
+        # Independent cross-check: extraterrestrial normal irradiance from
+        # pvlib times sin(apparent elevation), rather than a pinned constant.
+        pvlib = pytest.importorskip("pvlib")
+        times = pd.date_range("2019-06-01", periods=24, freq="1h")
+        lat, lon = np.array([47.36]), np.array([8.55])
+        ghi = np.zeros((24, 1))
+        ghi[8:18, 0] = 500.0
+        clearness = climate.hourly_clearness_index(ghi, times.values, lat, lon)
+
+        midpoints = pd.DatetimeIndex(times + pd.Timedelta("30min")).tz_localize("UTC")
+        position = pvlib.solarposition.get_solarposition(midpoints, lat[0], lon[0])
+        extra_normal = pvlib.irradiance.get_extra_radiation(midpoints, method="spencer")
+        horizontal = extra_normal.to_numpy() * np.sin(
+            np.radians(position["apparent_elevation"].to_numpy())
+        )
+        with np.errstate(invalid="ignore", divide="ignore"):
+            expected = np.where(
+                horizontal > 0, np.clip(ghi[:, 0] / horizontal, 0.0, 1.0), 0.0
+            )
+        expected = np.where(ghi[:, 0] > 0, expected, np.nan)
+        np.testing.assert_allclose(clearness[:, 0], expected, rtol=2e-3, equal_nan=True)
+
+    def test_monthly_output_is_pinned(self):
+        # Regression pin against silent drift in the synthesis -> PV chain.
+        # Not a physical validation: the input is a synthetic ramp.
+        times = pd.date_range("2019-01-01", periods=12, freq="MS")
+        ghi = np.linspace(80, 260, 12)[:, None]
+        result = climate.run_climate(_dataset(times, ghi), **PARAMS)
+        assert result["pv"].attrs["unit"] == "Wh/day"
+        expected_zurich = [
+            3191.6769,
+            2512.2147,
+            2228.5410,
+            2404.3959,
+            2649.0744,
+            2946.0635,
+            3250.6555,
+            3706.5915,
+            4967.1208,
+            6984.9952,
+            7453.4419,
+            7274.2673,
+        ]
+        np.testing.assert_allclose(
+            result["pv"].to_numpy()[:, 0], expected_zurich, rtol=1e-6
+        )
+
+    def test_seasonal_frequency_runs(self):
+        times = pd.date_range("2019-01-01", periods=4, freq="QS-DEC")
+        result = climate.run_climate(_dataset(times, 180.0), **PARAMS)
+        pv = result["pv"].to_numpy()
+        assert pv.shape == (4, 2)
+        assert np.isfinite(pv).all()
+        assert (pv > 0).all()
+
+
+class TestRawDataAndLegacyPredictors:
+    def test_include_raw_data_on_coarse_input_raises(self):
+        # Coarse input synthesises its own hourly irradiance and aggregates
+        # it away, so there is no per-timestep raw data to return
+        times = pd.date_range("2019-01-01", periods=3, freq="MS")
+        with pytest.raises(ValueError, match="only available for hourly input"):
+            climate.run_climate(_dataset(times, 180.0), include_raw_data=True, **PARAMS)
+
+    def test_include_raw_data_without_diffuse_fraction_raises(self):
+        times = pd.date_range("2019-06-01", periods=48, freq="1h")
+        with pytest.raises(ValueError, match="diffuse_fraction"):
+            climate.run_climate(_dataset(times, 300.0), include_raw_data=True, **PARAMS)
+
+    def test_include_raw_data_with_diffuse_fraction_returns_raw_variables(self):
+        times = pd.date_range("2019-06-01", periods=48, freq="1h")
+        data = _dataset(times, 300.0)
+        data["diffuse_fraction"] = (
+            ("time", "site"),
+            np.full((len(times), len(LATS)), 0.4),
+        )
+        result = climate.run_climate(data, include_raw_data=True, **PARAMS)
+        assert {"pv", "direct", "diffuse", "module_temperature"} <= set(
+            result.data_vars
+        )
+
+    def test_legacy_brl_predictors_changes_results(self):
+        # The sole escape hatch for reproducing v0.3 diffuse fractions
+        times = pd.date_range("2019-06-01", periods=3 * 24, freq="1h")
+        day_shape = np.clip(np.sin(np.pi * (times.hour.to_numpy() - 5) / 14), 0, None)
+        data = _dataset(times, 0.0)
+        data["global_horizontal"].values[:] = np.tile(
+            600.0 * day_shape[:, None], (1, len(LATS))
+        )
+        corrected = climate.run_climate(data, **PARAMS)
+        legacy = climate.run_climate(data, legacy_brl_predictors=True, **PARAMS)
+        corrected_pv = corrected["pv"].to_numpy()
+        legacy_pv = legacy["pv"].to_numpy()
+        assert np.isfinite(legacy_pv).all()
+        # The units fix raises the diffuse fraction, so it lowers output
+        assert not np.array_equal(corrected_pv, legacy_pv)
+        assert corrected_pv.sum() < legacy_pv.sum()
+
+
+class TestGridDimensionNames:
+    def test_cf_dimension_names_match_short_names(self):
+        # gsee.climate's input is CF-conventional climate data by definition,
+        # so latitude/longitude must work as well as lat/lon
+        times = pd.date_range("2019-01-01", periods=3, freq="MS")
+
+        def grid(lat_name, lon_name):
+            return xr.Dataset(
+                {
+                    "global_horizontal": (
+                        ("time", lat_name, lon_name),
+                        np.full((3, 2, 2), 150.0),
+                    )
+                },
+                coords={"time": times, lat_name: [40.0, 50.0], lon_name: [0.0, 10.0]},
+            )
+
+        short = climate.run_climate(grid("lat", "lon"), **PARAMS)
+        cf = climate.run_climate(grid("latitude", "longitude"), **PARAMS)
+        assert short["pv"].dims == ("time", "lat", "lon")
+        assert cf["pv"].dims == ("time", "latitude", "longitude")
+        np.testing.assert_array_equal(short["pv"].to_numpy(), cf["pv"].to_numpy())
+
+
 class TestFrequencyDetection:
     @pytest.mark.parametrize(
         "freq,expected",
@@ -333,3 +532,34 @@ class TestFrequencyDetection:
         parsed = climate.parse_cmip_time([20070104.5, 20070105.0])
         assert parsed[0] == pd.Timestamp("2007-01-04 12:00")
         assert parsed[1] == pd.Timestamp("2007-01-05 00:00")
+
+    def test_parse_cmip_time_rounds_rather_than_truncates(self):
+        # 0.9583 * 24 = 22.999...; truncating gives hour 22, rounding gives 23.
+        # The cases above cannot tell the two apart, since floor and round agree
+        # on exact halves and whole days.
+        parsed = climate.parse_cmip_time([20500716.9583, 20500716.0417])
+        assert parsed[0] == pd.Timestamp("2050-07-16 23:00")
+        assert parsed[1] == pd.Timestamp("2050-07-16 01:00")
+
+    @pytest.mark.parametrize(
+        "attribute,freq,expected",
+        [("yr", "YS", "A"), ("1hr", "1h", "H"), ("hour", "1h", "H")],
+    )
+    def test_detect_from_cmip_attribute(self, attribute, freq, expected):
+        data = xr.Dataset(
+            coords={"time": pd.date_range("2019-01-01", periods=8, freq=freq)},
+            attrs={"frequency": attribute},
+        )
+        assert climate.detect_frequency(data) == expected
+
+    @pytest.mark.parametrize("attribute", ["3hr", "6hr"])
+    def test_multi_hour_frequency_rejected(self, attribute):
+        # Treating these as hourly would silently mislabel the output: the
+        # hourly path assumes 1-hour steps for the clearness-index midpoint,
+        # the BRL lag, and the Wh-per-step unit.
+        data = xr.Dataset(
+            coords={"time": pd.date_range("2019-01-01", periods=8, freq="3h")},
+            attrs={"frequency": attribute},
+        )
+        with pytest.raises(ValueError, match="not supported"):
+            climate.detect_frequency(data)

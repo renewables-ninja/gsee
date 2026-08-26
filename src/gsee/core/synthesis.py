@@ -2,16 +2,15 @@
 Synthetic hourly irradiance from coarse climate data
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Vectorized re-implementation of the v0.3 climate data interface's
-Cython kernels: a sinusoidal diurnal irradiance profile between
-sunrise and sunset (normalized so the input daily mean is preserved
-exactly), and sampling of daily irradiance totals from monthly
-probability density functions (inverse-CDF instead of the original
-scipy `rv_discrete`).
+A sinusoidal diurnal irradiance profile between sunrise and sunset
+(normalized so the input daily mean is preserved exactly), and
+inverse-CDF sampling of daily irradiance totals from monthly
+probability density functions.
 
-Sunrise/sunset hours come from the vectorized solar core instead of
-ephem; days where the sun never rises or never sets use hour 0 /
-23.999 as the profile bounds, as in v0.3.
+Sunrise and sunset hours come from the vectorized solar core. Days
+where the sun never rises or never sets have no event to anchor to
+and use hour 0 / 23.999 as the profile bounds, which means polar day
+and polar night are treated identically.
 
 """
 
@@ -58,7 +57,7 @@ def diurnal_profile(daily_mean, days, lat, lon):
 
     # Hour midpoints against the sunlit window; days where the sunlit
     # window wraps past midnight UTC (sites far from Greenwich) use the
-    # wrapped form, as in the v0.3 kernel
+    # wrapped form
     hour = (np.arange(24) + 0.5)[None, :, None]
     total = daily_mean[:, None, :] * 24.0  # Wh/day
     with np.errstate(invalid="ignore", divide="ignore"):
@@ -110,8 +109,7 @@ def sample_from_pdfs(xk, pk, n_days, rng):
     ----------
     xk, pk : (S, B) arrays
         Value bins and their probabilities (need not be normalized).
-        Sites whose probabilities sum to zero (or are NaN) draw zeros,
-        as in v0.3.
+        Sites whose probabilities sum to zero (or are NaN) draw zeros.
     n_days : int
     rng : numpy.random.Generator
 

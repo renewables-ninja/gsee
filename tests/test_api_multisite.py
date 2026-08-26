@@ -347,3 +347,42 @@ def test_run_sites_physically_equivalent_to_reference():
         if not ok:
             failures.append("{}:\n{}".format(case_id, report))
     assert not failures, "\n\n".join(failures)
+
+
+def test_run_grid_accepts_cf_dimension_names():
+    # CF-conventional climate data names the dimensions latitude/longitude;
+    # the output keeps whichever names the input used.
+    times = pd.date_range("2019-06-01", periods=48, freq="1h")
+
+    def grid(lat_name, lon_name):
+        shape = (len(times), 2, 2)
+        return xr.Dataset(
+            {
+                "global_horizontal": (
+                    ("time", lat_name, lon_name),
+                    np.full(shape, 400.0),
+                ),
+                "diffuse_fraction": (("time", lat_name, lon_name), np.full(shape, 0.4)),
+            },
+            coords={"time": times, lat_name: [40.0, 50.0], lon_name: [0.0, 10.0]},
+        )
+
+    short = api.run_grid(
+        grid("lat", "lon"), tilt=30, azim=180, tracking=0, capacity=1000.0
+    )
+    cf = api.run_grid(
+        grid("latitude", "longitude"), tilt=30, azim=180, tracking=0, capacity=1000.0
+    )
+    assert short["pv"].dims == ("time", "lat", "lon")
+    assert cf["pv"].dims == ("time", "latitude", "longitude")
+    np.testing.assert_array_equal(short["pv"].to_numpy(), cf["pv"].to_numpy())
+
+
+def test_run_grid_unknown_dimension_names_raise():
+    times = pd.date_range("2019-06-01", periods=48, freq="1h")
+    data = xr.Dataset(
+        {"global_horizontal": (("time", "y", "x"), np.full((len(times), 2, 2), 400.0))},
+        coords={"time": times, "y": [40.0, 50.0], "x": [0.0, 10.0]},
+    )
+    with pytest.raises(ValueError, match="must have one of"):
+        api.run_grid(data, tilt=30, azim=180, tracking=0, capacity=1000.0)

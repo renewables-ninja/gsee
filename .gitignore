@@ -12,3 +12,5 @@ site/
 coverage.xml
 .coverage
 docs/figures/*.svg
+.DS_Store
+Solar Validation/

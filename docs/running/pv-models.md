@@ -1,6 +1,6 @@
 # PV models
 
-The same model options apply to all entry points: `gsee.pv.run_model()` (single site), [`gsee.api.run_sites()`/`run_grid()`](multi-site.md) (many sites), and [`gsee.climate.run_climate()`](../climatedata-interface.md).
+The same model options apply to all entry points: `gsee.pv.run_model()` (single site), [`gsee.api.run_sites()`/`run_grid()`](multi-site.md) (many sites), and [`gsee.climate.run_climate()`](../climatedata-interface.md). The frozen [legacy path](legacy.md) is the exception and supports only a subset.
 
 ## Panel technologies
 
@@ -16,7 +16,7 @@ The `technology` parameter selects the panel model:
 | `singlediode`           | Single-diode | Custom module: requires `module_params`                                                                                                            |
 
 !!! note "Which crystalline silicon model?"
-The default `csi` is kept for continuity with earlier GSEE versions and Renewables.ninja simulations. For modern installations we recommend `csi-new`: its coefficients are fitted to recent module data and track the physics-based single-diode model much more closely, particularly at low irradiance (see [the comparison below](#comparing-the-panel-models)). It may become the default in a future version.
+    The default `csi` is kept for continuity with earlier GSEE versions and Renewables.ninja simulations. For modern installations we recommend `csi-new`: its coefficients are fitted to recent module data and track the physics-based single-diode model much more closely, particularly at low irradiance (see [the comparison below](#comparing-the-panel-models)). It may become the default in a future version.
 
 ### The Huld model
 
@@ -38,6 +38,23 @@ Module temperature is estimated with the SAPM cell temperature model; `temperatu
 The figure below compares the relative efficiency of the three crystalline silicon panel models against in-plane irradiance (left, at STC module temperature) and against module temperature (right, at STC irradiance). Both panels vary module temperature directly, so the comparison shows only the efficiency models, not the models' different ambient-to-module temperature estimates. The code to reproduce it is in [`docs/figures/plot_model_comparison.py`](https://github.com/renewables-ninja/gsee/blob/main/docs/figures/plot_model_comparison.py) (`pixi run docs-figures`).
 
 ![Relative efficiency of the c-Si panel models against irradiance and module temperature](../figures/model-comparison.svg)
+
+## Efficiency at cold temperatures
+
+All panel models are parametrised relative to the standard test conditions of 1000 W/m2 and 25 °C module temperature.
+Modules are more efficient when they are colder than that, so relative efficiency rises above 1.0 at low module temperatures.
+This is physically expected rather than an artefact: the Huld 2010, `csi-new` and single-diode models agree on it, reaching roughly 1.10 to 1.19 at the cold end of the right-hand plot above.
+
+GSEE therefore leaves relative efficiency uncapped by default.
+If you need the capped behaviour, for example to compare against older simulation runs, pass:
+
+```python
+result = gsee.pv.run_model(
+    data, ..., temperature_correction_method="clip_high_efficiency"
+)
+```
+
+`temperature_correction_method` accepts `None` (the default, uncapped) or `"clip_high_efficiency"` (relative efficiency capped at 1.0), and works the same way in all entry points except the [legacy path](legacy.md), which rejects it.
 
 ## Tracking
 

@@ -43,9 +43,9 @@ class Tolerances:
     # for sites polewards of POLAR_REFERENCE_LATITUDE: the reference
     # data's rise/set times come from the iterative SPA appendix
     # method, whose accuracy degrades to minutes at extreme latitudes
-    # (verified by evaluating the true solar elevation at the disputed
-    # event times — see the phase 2 notes in the plan). Output metrics
-    # remain fully enforced at all latitudes.
+    # (confirmed by evaluating the true solar elevation at the disputed
+    # event times: the vectorized method is the more accurate of the
+    # two). Output metrics remain fully enforced at all latitudes.
     polar_informational: bool
 
 

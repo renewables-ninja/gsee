@@ -27,20 +27,22 @@ _RAW_DATA_VARIABLES = ("direct", "diffuse", "module_temperature", "relative_effi
 def sun_angles_frame(datetime_index, coords, **kwargs):
     """
     Solar angles for a single site as a DataFrame compatible with
-    `trigon.sun_angles()` output: radian columns `sun_alt`,
+    `gsee.legacy.trigon.sun_angles()` output: radian columns `sun_alt`,
     `sun_zenith`, `sun_azimuth` plus `risen_fraction` (as consumed by
     `aperture_irradiance`), degree columns `apparent_elevation` and
     `azimuth`, and `sunrise`/`sunset` timestamps placed in the timestep
     they occur in.
 
-    Results are physically equivalent to `trigon.sun_angles()` but not
+    Results are physically equivalent to `gsee.legacy.trigon.sun_angles()`
+    but not
     bit-identical: sunrise/sunset come from the vectorized hour-angle
     method rather than iterative SPA (see gsee.core.solarposition).
 
     Parameters
     ----------
     datetime_index : pandas DatetimeIndex
-        Uniformly spaced, tz-aware in UTC.
+        Uniformly spaced, tz-aware in UTC. At least two timesteps are
+        required, since the timestep length is derived from the index.
     coords : (float, float)
         (lat, lon) tuple.
     kwargs : passed on to `gsee.core.solarposition.sun_angles`
@@ -163,7 +165,7 @@ def _compute_chunk(payload):
         )
 
     # NaN inputs must not masquerade as valid output: the irradiance
-    # step maps NaN to 0 internally (as run_model does), so mask here
+    # step maps NaN to 0 internally, so mask here
     nan_input = (
         np.isnan(payload["direct"]) | np.isnan(payload["diffuse"]) | np.isnan(tamb)
     )
@@ -232,8 +234,9 @@ def run_sites(
     Parameters
     ----------
     data : xarray.Dataset
-        Dimensions `time` (uniformly spaced; interpreted as UTC) and
-        `site`, with coordinates `lat(site)` and `lon(site)` in
+        Dimensions `time` (uniformly spaced; interpreted as UTC, and at
+        least two timesteps long, since the timestep length is derived
+        from it) and `site`, with coordinates `lat(site)` and `lon(site)` in
         degrees. Variables: `global_horizontal` (W/m2),
         `diffuse_fraction`, and optionally `temperature` (degC,
         assumed 20 if absent).
@@ -383,11 +386,31 @@ def run_sites(
     return result
 
 
+_LAT_DIM_NAMES = ("lat", "latitude")
+_LON_DIM_NAMES = ("lon", "longitude")
+
+
+def _grid_dim(data, candidates):
+    """The first of `candidates` present in `data`'s dimensions."""
+    for name in candidates:
+        if name in data.dims:
+            return name
+    raise ValueError(
+        "data must have one of {} as a dimension; got {}".format(
+            list(candidates), list(data.dims)
+        )
+    )
+
+
 def run_grid(data, *args, **kwargs):
     """
     Run the PV model over a regular lat/lon grid: `data` has dimensions
     `(time, lat, lon)`; the grid is stacked to a flat site axis, run
     through `run_sites` (same parameters), and unstacked again.
+
+    The latitude and longitude dimensions may be named either `lat`/`lon`
+    or, as in CF-conventional climate data, `latitude`/`longitude`; the
+    output keeps whichever names the input used.
 
     Cells without any finite irradiance data (e.g. ocean cells in
     gridded climate data) are skipped and returned as NaN, so masked
@@ -396,6 +419,13 @@ def run_grid(data, *args, **kwargs):
     Returns an xarray.Dataset with `pv` over (time, lat, lon).
 
     """
-    stacked = data.stack(site=("lat", "lon"))
+    lat_dim = _grid_dim(data, _LAT_DIM_NAMES)
+    lon_dim = _grid_dim(data, _LON_DIM_NAMES)
+    renamed = {lat_dim: "lat", lon_dim: "lon"}
+    stacked = data.stack(site=(lat_dim, lon_dim))
+    if lat_dim != "lat" or lon_dim != "lon":
+        stacked = stacked.rename(renamed)
     result = run_sites(stacked, *args, **kwargs)
-    return result.unstack("site").transpose("time", "lat", "lon")
+    if lat_dim != "lat" or lon_dim != "lon":
+        result = result.rename({v: k for k, v in renamed.items()})
+    return result.unstack("site").transpose("time", lat_dim, lon_dim)

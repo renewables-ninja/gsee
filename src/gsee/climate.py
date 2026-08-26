@@ -3,8 +3,8 @@ Climate data interface
 ~~~~~~~~~~~~~~~~~~~~~~
 
 Run the PV model directly on gridded climate data at annual, seasonal,
-monthly, daily or hourly resolution. This is a conversion of the v0.3
-`climatedata_interface` as a thin layer on the vectorized core.
+monthly, daily or hourly resolution, as a thin layer on the vectorized
+core.
 
 """
 
@@ -78,7 +78,7 @@ def run_climate(
         Must contain `global_horizontal` (mean irradiance, W/m2); may
         contain `temperature` (degC) and, for hourly data,
         `diffuse_fraction`. Coarser-than-hourly diffuse fraction input
-        is ignored (the BRL estimate is used), as in v0.3.
+        is ignored and the BRL estimate is used.
     tilt, azim, tracking, capacity :
         As for `api.run_sites` (tilt may be a callable of latitude).
     frequency : str, optional
@@ -108,12 +108,20 @@ def run_climate(
     Returns
     -------
     xarray.Dataset with `pv` over the input time dimension(s), in Wh
-    per hour for hourly input and Wh per day otherwise (as in v0.3).
+    per hour for hourly input and Wh per day otherwise.
 
     """
-    if "lat" in data.dims and "lon" in data.dims:
+    grid_dims = [
+        next((name for name in candidates if name in data.dims), None)
+        for candidates in (api._LAT_DIM_NAMES, api._LON_DIM_NAMES)
+    ]
+    if all(grid_dims):
+        lat_dim, lon_dim = grid_dims
+        gridded = data.stack(site=(lat_dim, lon_dim))
+        if (lat_dim, lon_dim) != ("lat", "lon"):
+            gridded = gridded.rename({lat_dim: "lat", lon_dim: "lon"})
         stacked = run_climate(
-            data.stack(site=("lat", "lon")),
+            gridded,
             tilt,
             azim,
             tracking,
@@ -125,7 +133,9 @@ def run_climate(
             legacy_brl_predictors=legacy_brl_predictors,
             **run_sites_kwargs,
         )
-        return stacked.unstack("site").transpose("time", "lat", "lon")
+        if (lat_dim, lon_dim) != ("lat", "lon"):
+            stacked = stacked.rename({"lat": lat_dim, "lon": lon_dim})
+        return stacked.unstack("site").transpose("time", lat_dim, lon_dim)
 
     if "global_horizontal" not in data:
         raise ValueError("data must contain a 'global_horizontal' variable")
@@ -136,9 +146,31 @@ def run_climate(
         tilt=tilt, azim=azim, tracking=tracking, capacity=capacity, **run_sites_kwargs
     )
 
+    # Raw per-timestep variables only exist where the model runs directly on
+    # the input timesteps. Everywhere else the hourly series is synthesised
+    # and then aggregated, so there is nothing meaningful to return -- say so
+    # instead of silently dropping the request.
+    if params.get("include_raw_data"):
+        if frequency != "H":
+            raise ValueError(
+                "include_raw_data is only available for hourly input; "
+                "coarser input synthesises its own hourly irradiance, which "
+                "is aggregated away before the result is returned"
+            )
+        if "diffuse_fraction" not in data:
+            raise ValueError(
+                "include_raw_data requires a 'diffuse_fraction' variable; "
+                "without it the hourly diffuse fraction is estimated with "
+                "the BRL model and the raw variables are not retained"
+            )
+
     if frequency == "H":
         return _run_hourly_input(data, params, legacy_brl_predictors)
     return _run_coarse_input(data, frequency, pdfs, seed, params, legacy_brl_predictors)
+
+
+# CMIP multi-hour sampling frequencies, rejected rather than treated as hourly
+_MULTI_HOUR_ATTRS = frozenset({"3hr", "6hr"})
 
 
 def detect_frequency(data, frequency="detect"):
@@ -151,9 +183,29 @@ def detect_frequency(data, frequency="detect"):
     """
     detected = None
     attr = str(data.attrs.get("frequency", ""))[:4]
-    by_attr = {"year": "A", "mon": "M", "day": "D", "hour": "H"}
+    # CMIP5/6 write "yr", "mon", "day", "1hr"; older files "year"/"hour"
+    by_attr = {
+        "year": "A",
+        "yr": "A",
+        "mon": "M",
+        "day": "D",
+        "hour": "H",
+        "1hr": "H",
+    }
+    # Multi-hour steps are not hourly: the hourly path assumes 1-hour steps
+    # throughout (the clearness index takes the midpoint half an hour in, the
+    # BRL persistence predictor is defined on hourly lags, and the result is
+    # labelled Wh per step), so mapping them to "H" would return numbers that
+    # look plausible and are wrong.
+    if attr in _MULTI_HOUR_ATTRS:
+        raise ValueError(
+            "'{}' input is not supported: the climate data interface treats "
+            "sub-daily data as hourly. Resample to hourly or daily first, or "
+            "run it directly with gsee.api.run_sites if it already has a "
+            "'diffuse_fraction' variable".format(attr)
+        )
     if attr:
-        detected = by_attr.get(attr, attr[0].upper() if attr else None)
+        detected = by_attr.get(attr, by_attr.get(attr[:3], attr[0].upper()))
     else:
         try:
             inferred = pd.infer_freq(data["time"].to_index())
@@ -192,7 +244,8 @@ def parse_cmip_time(values):
     """Convert CMIP-style numeric time values ("%Y%m%d.%f" days) to datetimes."""
     numeric = np.asarray(values, dtype=float)
     dates = pd.to_datetime([str(int(value)) for value in numeric], format="%Y%m%d")
-    hours = np.floor((numeric % 1) * 24)
+    # Round rather than truncate: 0.9583 * 24 = 22.999... is hour 23, not 22
+    hours = np.round((numeric % 1) * 24, 6).round()
     return dates + pd.to_timedelta(hours, unit="h")
 
 
@@ -200,7 +253,7 @@ def hourly_clearness_index(ghi, times, lat, lon):
     """
     Hourly clearness index: measured irradiance over extraterrestrial
     horizontal irradiance at the timestep midpoint (exact solar
-    positions; the v0.3 Cython kernel used an approximate declination).
+    positions).
     NaN where the input irradiance is zero, negative or NaN.
 
     """
@@ -292,7 +345,7 @@ def _representative_days(times, frequency):
     One (day, input step) pair per simulated day: the input day itself
     for daily data, the mid-month day for monthly/seasonal data, and
     two near-equinox days (31 March, 30 September) for annual data,
-    replicating the v0.3 choices.
+
 
     """
     step_index = []

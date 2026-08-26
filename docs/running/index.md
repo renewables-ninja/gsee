@@ -39,5 +39,5 @@ With `include_raw_data=True`, a DataFrame is returned that also contains the in-
 Model configuration beyond the required parameters, including panel technology, inverter sizing, and system losses, is described on the [PV models](pv-models.md) page.
 
 !!! tip
-When calling `run_model` repeatedly over the same time index and site (e.g. to compare configurations), compute the solar angles once with `gsee.api.sun_angles_frame()` and pass them via `angles=`.
-See [speeding up single-site runs](multi-site.md#speeding-up-single-site-runs) for details.
+    When calling `run_model` repeatedly over the same time index and site (e.g. to compare configurations), compute the solar angles once with `gsee.api.sun_angles_frame()` and pass them via `angles=`.
+    See [speeding up single-site runs](multi-site.md#speeding-up-single-site-runs) for details.
